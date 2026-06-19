@@ -59,7 +59,7 @@ export async function orchestrate(
     const waveAgents = getAgentsByWave(wave);
     const contextFromPreviousWaves = buildContext(results);
 
-    const wavePromises = waveAgents.map(async (agentConfig) => {
+    for (const agentConfig of waveAgents) {
       // ── Notify: agent starting ──────────────────────────────────────
       onProgress?.({ type: "agent-start", agentId: agentConfig.id });
 
@@ -99,8 +99,6 @@ export async function orchestrate(
           output,
           error: output.error,
         });
-
-        return output;
       } catch (error) {
         const errorOutput: AgentOutput = {
           agentId: agentConfig.id,
@@ -119,12 +117,11 @@ export async function orchestrate(
           agentId: agentConfig.id,
           error: errorOutput.error,
         });
-
-        return errorOutput;
       }
-    });
 
-    await Promise.all(wavePromises);
+      // Add a small 1-second delay between agents to prevent hitting API rate limits
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
 
   return results as Record<AgentId, AgentOutput>;
