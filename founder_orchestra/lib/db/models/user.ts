@@ -16,6 +16,7 @@ import mongoose, { Schema, type Document } from "mongoose";
 export interface IUser extends Document {
   name: string;
   email: string;
+  password: string;
   image?: string;
   /** Array of Project document IDs that belong to this user */
   projects: mongoose.Types.ObjectId[];
@@ -31,6 +32,7 @@ const UserSchema = new Schema<IUser>(
       required: true,
       unique: true, // No two users can have the same email
     },
+    password: { type: String, required: true },
     image: { type: String },
     projects: [
       {

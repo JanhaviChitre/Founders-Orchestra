@@ -69,45 +69,47 @@ export function CompetitorTable({ competitors = DEFAULT_COMPETITORS }: Competito
   return (
     <Card className="mb-7">
       <CardContent className="pt-5">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Company</TableHead>
-              <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">AI Coaching</TableHead>
-              <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Personalization</TableHead>
-              <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Price/mo</TableHead>
-              <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Threat Level</TableHead>
-            </TableRow>
-          </TableHeader>
-          <MotionTableBody variants={containerVariants} initial="hidden" animate="show">
-            {competitors.map((comp) => (
-              <MotionTableRow
-                key={comp.name}
-                variants={rowVariants}
-                className="border-[rgba(255,255,255,.04)] hover:bg-[rgba(255,255,255,.02)]"
-              >
-                <TableCell>
-                  <span className="font-semibold text-[13px]">{comp.name}</span>
-                  <span className="block text-[11px] text-fo-sub">{comp.tag}</span>
-                </TableCell>
-                <TableCell>
-                  <ScoreBar score={comp.aiCoachingScore} />
-                </TableCell>
-                <TableCell>
-                  <ScoreBar score={comp.personalizationScore} />
-                </TableCell>
-                <TableCell>
-                  <span className="font-mono text-xs">{comp.pricePerMonth}</span>
-                </TableCell>
-                <TableCell>
-                  <Badge className={cn("text-[10px] font-bold capitalize", THREAT_STYLES[comp.threatLevel])}>
-                    {comp.threatLevel}
-                  </Badge>
-                </TableCell>
-              </MotionTableRow>
-            ))}
-          </MotionTableBody>
-        </Table>
+        <div className="w-full overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Company</TableHead>
+                <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">AI Coaching</TableHead>
+                <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Personalization</TableHead>
+                <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Price/mo</TableHead>
+                <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Threat Level</TableHead>
+              </TableRow>
+            </TableHeader>
+            <MotionTableBody variants={containerVariants} initial="hidden" animate="show">
+              {competitors.map((comp) => (
+                <MotionTableRow
+                  key={comp.name}
+                  variants={rowVariants}
+                  className="border-[rgba(255,255,255,.04)] hover:bg-[rgba(255,255,255,.02)]"
+                >
+                  <TableCell>
+                    <span className="font-semibold text-[13px]">{comp.name}</span>
+                    <span className="block text-[11px] text-fo-sub">{comp.tag}</span>
+                  </TableCell>
+                  <TableCell>
+                    <ScoreBar score={comp.aiCoachingScore} />
+                  </TableCell>
+                  <TableCell>
+                    <ScoreBar score={comp.personalizationScore} />
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-mono text-xs">{comp.pricePerMonth}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={cn("text-[10px] font-bold capitalize", THREAT_STYLES[comp.threatLevel])}>
+                      {comp.threatLevel}
+                    </Badge>
+                  </TableCell>
+                </MotionTableRow>
+              ))}
+            </MotionTableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

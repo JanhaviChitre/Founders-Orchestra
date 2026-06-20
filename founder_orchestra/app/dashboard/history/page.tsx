@@ -19,15 +19,16 @@ import { useProjectStore } from "@/lib/store/project-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { History, ArrowRight, Trash2, Calendar, FileText, Sparkles } from "lucide-react";
+import { History, ArrowRight, Trash2, Calendar, FileText, Sparkles, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { ProjectState, OrchestrationStatus } from "@/lib/types";
 
 const STATUS_CONFIGS: Record<OrchestrationStatus, { label: string; className: string }> = {
-  completed: { label: "Complete", className: "bg-[rgba(16,185,129,.15)] text-fo-emerald border-0" },
-  partial: { label: "Partial", className: "bg-[rgba(245,158,11,.15)] text-fo-amber border-0" },
-  "in-progress": { label: "Running", className: "bg-[rgba(99,102,241,.15)] text-fo-indigo border-0" },
-  "not-started": { label: "Queued", className: "bg-[rgba(100,116,139,.1)] text-fo-muted border-0" },
+  completed: { label: "Complete", className: "bg-[rgba(16,185,129,.15)] text-fo-emerald border-[rgba(16,185,129,.3)]" },
+  partial: { label: "Partial", className: "bg-[rgba(245,158,11,.15)] text-fo-amber border-[rgba(245,158,11,.3)]" },
+  "in-progress": { label: "Running", className: "bg-[rgba(99,102,241,.15)] text-fo-indigo border-[rgba(99,102,241,.3)]" },
+  "not-started": { label: "Draft", className: "bg-fo-surface2 text-fo-sub border-border" },
+  paused: { label: "Approval Required", className: "bg-[rgba(245,158,11,.15)] text-fo-amber border-[rgba(245,158,11,.3)]" },
 };
 
 import type { AgentId, AgentOutput } from "@/lib/types";
@@ -177,25 +178,68 @@ export default function HistoryPage() {
     }
   };
 
-  // Simulated client-side deletion to keep all changes strictly inside frontend scope
-  const handleDeleteProject = (id: string, name: string) => {
-    setProjects((prev) => prev.filter((p) => p._id !== id));
-    toast({
-      title: "Project Removed",
-      description: `Removed "${name}" from your history view.`,
-    });
+  const handleDeleteProject = async (id: string, name: string) => {
+    try {
+      if (id.startsWith("mock-")) {
+        setProjects((prev) => prev.filter((p) => p._id !== id));
+        toast({
+          title: "Project Removed",
+          description: `Removed "${name}" template from history.`,
+        });
+        return;
+      }
+      
+      const response = await fetch(`/api/projects?id=${id}`, {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to delete project");
+      }
+      
+      setProjects((prev) => prev.filter((p) => p._id !== id));
+      toast({
+        title: "Project Deleted",
+        description: `Permanently deleted "${name}" from database.`,
+      });
+      
+      const activeProjectId = useProjectStore.getState().projectId;
+      if (activeProjectId === id) {
+        useProjectStore.getState().resetProject();
+      }
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: "Could not remove the project from the database.",
+      });
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2.5 pb-4 border-b border-border">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-fo-indigo to-purple-500 flex items-center justify-center">
-          <History size={16} className="text-white" />
+      <div className="flex items-center justify-between pb-4 border-b border-border">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-fo-indigo to-purple-500 flex items-center justify-center">
+            <History size={16} className="text-white" />
+          </div>
+          <div>
+            <h1 className="font-display text-xl font-bold tracking-tight">Project History</h1>
+            <p className="text-xs text-fo-sub mt-0.5">View and manage your past AI orchestration runs.</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-display text-xl font-bold tracking-tight">Project History</h1>
-          <p className="text-xs text-fo-sub mt-0.5">View and manage your past AI orchestration runs.</p>
-        </div>
+        <Button
+          size="sm"
+          className="bg-fo-indigo text-white hover:opacity-85 text-xs font-semibold gap-1.5"
+          onClick={() => {
+            useProjectStore.getState().resetProject();
+            router.push("/");
+          }}
+        >
+          <Plus size={13} className="text-white" />
+          New Project
+        </Button>
       </div>
 
       {loading ? (

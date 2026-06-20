@@ -82,6 +82,8 @@ export const startupInputSchema = z.object({
 export const orchestrateRequestSchema = z.object({
   input: startupInputSchema,
   projectId: mongoIdSchema.optional(),
+  targetAgents: z.array(z.string()).optional(),
+  previousResults: z.record(z.string(), z.any()).optional(),
 });
 
 /** POST /api/projects */
@@ -99,6 +101,13 @@ export const reportRequestSchema = z.object({
   projectId: mongoIdSchema,
 });
 
+/** POST /api/auth/register */
+export const registerSchema = z.object({
+  name: safeString(120),
+  email: z.string().email("Invalid email address").transform(sanitize),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Schema types (inferred) — useful when you need the validated type
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,3 +116,4 @@ export type OrchestrateRequestBody = z.infer<typeof orchestrateRequestSchema>;
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type GetProjectQuery = z.infer<typeof getProjectQuerySchema>;
 export type ReportRequestBody = z.infer<typeof reportRequestSchema>;
+export type RegisterRequestBody = z.infer<typeof registerSchema>;

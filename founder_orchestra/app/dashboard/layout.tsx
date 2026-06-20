@@ -32,10 +32,10 @@ export default function DashboardLayout({
       {/* Sidebar handles both desktop (fixed) and mobile (sheet overlay) states */}
       <Sidebar open={mobileOpen} onClose={() => setMobileOpen(false)} />
       
-      <main className="ml-0 md:ml-[240px] flex-1 flex flex-col min-h-screen w-full transition-all duration-300">
+      <main className="ml-0 md:ml-[240px] flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300">
         <Topbar
           onExportPdf={() => setPdfModalOpen(true)}
-          onRunAll={runOrchestration}
+          onRunAll={() => runOrchestration()}
           onMenuClick={() => setMobileOpen(true)}
         />
         <div className="flex-1 p-4 sm:p-7 sm:px-8">

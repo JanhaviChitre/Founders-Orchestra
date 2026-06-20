@@ -28,11 +28,25 @@ import { Project } from "@/lib/db/models/project";
 import { orchestrate } from "@/lib/agents/orchestrator";
 import { validateBody } from "@/lib/validations/helpers";
 import { orchestrateRequestSchema } from "@/lib/validations/schemas";
+import { rateLimit } from "@/lib/utils/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    // ── Apply Rate Limiting ─────────────────────────────────────────────
+    // Identify user by IP (simplified for boilerplate) or session
+    const ip = request.headers.get("x-forwarded-for") || "unknown-ip";
+    const rateLimitResult = rateLimit(ip, { limit: 5, windowMs: 60000 });
+    
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many requests, please try again later." },
+        { status: 429 }
+      );
+    }
+
     // ── Parse & validate request body ───────────────────────────────────
-    const validationResult = await validateBody(request, orchestrateRequestSchema);
+    const clonedRequest = request.clone();
+    const validationResult = await validateBody(clonedRequest, orchestrateRequestSchema);
     if (!validationResult.success) return validationResult.response;
     const body = validationResult.data;
 
@@ -95,41 +109,53 @@ export async function POST(request: Request) {
         });
 
         try {
-          // ── Run the orchestrator ──────────────────────────────────
-          const results = await orchestrate(body.input, (event) => {
-            // Stream each agent event to the client
+          const targetAgents = body.targetAgents as any[] | undefined;
+          const orchestrateInput = {
+            ...body.input,
+            previousResults: targetAgents 
+              ? (project?.agents || body.previousResults || {}) 
+              : undefined,
+          };
+
+          // ── Run the pipeline for target waves & agents ───────────────────
+          const results = await orchestrate(orchestrateInput, (event) => {
             sendEvent(event);
-          });
+          }, [1, 2, 3], targetAgents);
+
+          let finalAgents = results;
 
           // ── Save final results to MongoDB ─────────────────────────
           if (dbConnected && project) {
             try {
-              project.agents = results;
+              finalAgents = targetAgents
+                ? { ...(project.agents || {}), ...results }
+                : results;
 
-              // Determine overall status
-              const allCompleted = Object.values(results).every(
-                (r) => r.status === "completed"
-              );
-              const anyCompleted = Object.values(results).some(
-                (r) => r.status === "completed"
-              );
+              project.agents = finalAgents;
 
-              project.overallStatus = allCompleted
+              const allAgentIds = ["startup-advisor", "market-research",
+                "product-manager", "marketing", "architect", "engineering-manager"];
+              const completedCount = Object.values(finalAgents).filter(
+                (r: any) => r.status === "completed"
+              ).length;
+
+              project.overallStatus = completedCount === allAgentIds.length
                 ? "completed"
-                : anyCompleted
-                ? "partial"
-                : "not-started";
+                : "partial";
 
               await project.save();
             } catch (dbSaveError) {
               console.warn("⚠️ Failed to save final results to MongoDB:", dbSaveError instanceof Error ? dbSaveError.message : String(dbSaveError));
             }
+          } else if (targetAgents) {
+            finalAgents = { ...(body.previousResults || {}), ...results };
           }
 
-          // ── Send completion event ─────────────────────────────────
+          // ── Send completion event ───────────────────────────────────
           sendEvent({
             type: "orchestration-complete",
             projectId: projectId,
+            results: finalAgents,
             overallStatus: dbConnected && project ? project.overallStatus : "completed",
           });
         } catch (error) {

@@ -26,6 +26,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { connectDB } from "@/lib/db/mongodb";
 import { User } from "@/lib/db/models/user";
 
+import bcryptjs from "bcryptjs";
+
 export const authOptions: NextAuthOptions = {
   // ── Providers: How users can sign in ────────────────────────────────────
   providers: [
@@ -43,42 +45,46 @@ export const authOptions: NextAuthOptions = {
         },
       },
 
-      /**
-       * This function runs when a user tries to sign in.
-       *
-       * TODO (Team Member C):
-       * - Add proper password hashing with bcrypt
-       * - Add input validation
-       * - Add rate limiting to prevent brute-force attacks
-       */
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
           return null; // null = sign-in failed
         }
 
-        await connectDB();
+        const adminEmail = process.env.ADMIN_EMAIL;
+        const adminPassword = process.env.ADMIN_PASSWORD;
 
-        // ── Find or create user (simplified for boilerplate) ──────────
-        // In production, you should verify the password hash
-        let user = await User.findOne({ email: credentials.email });
+        if (!adminEmail || !adminPassword) {
+          console.warn("⚠️ ADMIN_EMAIL or ADMIN_PASSWORD is not configured. Authentication falling back to MongoDB.");
+          await connectDB();
+          const user = await User.findOne({ email: credentials.email });
 
-        if (!user) {
-          // Auto-create user for development convenience
-          // TODO: Replace with proper registration flow
-          user = await User.create({
-            name: credentials.email.split("@")[0],
-            email: credentials.email,
-            projects: [],
-          });
+          if (!user) {
+            return null; // No user found
+          }
+
+          const isValidPassword = await bcryptjs.compare(credentials.password, user.password);
+
+          if (!isValidPassword) {
+            return null; // Invalid password
+          }
+
+          return {
+            id: user._id.toString(),
+            name: user.name,
+            email: user.email,
+            image: user.image,
+          };
         }
 
-        // Return the user object — NextAuth will create a session
-        return {
-          id: user._id.toString(),
-          name: user.name,
-          email: user.email,
-          image: user.image,
-        };
+        if (credentials.email === adminEmail && credentials.password === adminPassword) {
+          return {
+            id: "admin-user",
+            name: "Founder Admin",
+            email: adminEmail,
+          };
+        }
+
+        return null; // Reject all other credential attempts
       },
     }),
   ],

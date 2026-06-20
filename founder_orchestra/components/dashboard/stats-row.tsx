@@ -28,27 +28,32 @@ interface StatCardData {
 }
 
 export function StatsRow() {
-  const agents = useProjectStore((s) => s.agents);
+  const agents = useProjectStore((s) => s.agents) || {};
 
   // ── Extract metrics from agent outputs ──────────────────────────────────
-  const tam = (agents["market-research"]?.metadata?.tam as string) ?? "$42B";
-  const competitors = (agents["market-research"]?.metadata?.competitorCount as string) ?? "7";
-  const pmfScore = (agents["startup-advisor"]?.metadata?.viabilityScore as string) ?? "82";
-  const artifacts = (agents["engineering-manager"]?.metadata?.totalIssues as string) ?? "23";
+  // No fallback values — these are undefined until the agent actually runs
+  const tam = agents["market-research"]?.metadata?.tam as string | undefined;
+  const competitors = agents["market-research"]?.metadata?.competitorCount as string | undefined;
+  const pmfScore = agents["startup-advisor"]?.metadata?.viabilityScore as string | undefined;
+  const artifacts = agents["engineering-manager"]?.metadata?.totalIssues as string | undefined;
+
+  const overallStatus = useProjectStore((s) => s.overallStatus);
+  const hasRun = overallStatus !== "not-started";
 
   // ── Compute loading flags based on agent status ─────────────────────────
   const marketStatus = getAgentStatus(agents, "market-research");
   const advisorStatus = getAgentStatus(agents, "startup-advisor");
   const engStatus = getAgentStatus(agents, "engineering-manager");
 
-  const isMarketLoading = marketStatus === "running" || marketStatus === "idle";
-  const isAdvisorLoading = advisorStatus === "running" || advisorStatus === "idle";
-  const isEngLoading = engStatus === "running" || engStatus === "idle";
+  // Show skeleton when pipeline hasn't started OR when the specific agent is still running
+  const isMarketLoading = !hasRun || marketStatus !== "completed";
+  const isAdvisorLoading = !hasRun || advisorStatus !== "completed";
+  const isEngLoading = !hasRun || engStatus !== "completed";
 
   const stats: StatCardData[] = [
     {
       eyebrow: "Total Addressable Market",
-      value: tam,
+      value: tam ?? "",
       subtitle: "Global fitness app market by 2028",
       delta: "↑ 23% CAGR projected",
       color: "#6366F1",
@@ -57,7 +62,7 @@ export function StatsRow() {
     },
     {
       eyebrow: "Competitors Mapped",
-      value: competitors,
+      value: competitors ?? "",
       subtitle: "Direct + indirect competitors",
       delta: "↑ 2 gaps identified",
       color: "#10B981",
@@ -66,7 +71,7 @@ export function StatsRow() {
     },
     {
       eyebrow: "PMF Score",
-      value: pmfScore,
+      value: pmfScore ?? "",
       subtitle: "Based on demand & competition signals",
       delta: "↑ Strong signal",
       color: "#F59E0B",
@@ -75,7 +80,7 @@ export function StatsRow() {
     },
     {
       eyebrow: "Artifacts Generated",
-      value: artifacts,
+      value: artifacts ?? "",
       subtitle: "Docs, schemas, issues, copy blocks",
       delta: "↑ 14 more in progress",
       color: "#38BDF8",

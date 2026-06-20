@@ -12,7 +12,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useProjectStore } from "@/lib/store/project-store";
-import { Play, Download, Menu } from "lucide-react";
+import { Play, Download, Menu, Loader2 } from "lucide-react";
 
 interface TopbarProps {
   onExportPdf?: () => void;
@@ -22,6 +22,8 @@ interface TopbarProps {
 
 export function Topbar({ onExportPdf, onRunAll, onMenuClick }: TopbarProps) {
   const input = useProjectStore((s) => s.input);
+  const overallStatus = useProjectStore((s) => s.overallStatus);
+  const isRunning = overallStatus === "in-progress";
 
   return (
     <div className="flex items-center gap-2 sm:gap-4 px-4 sm:px-8 py-3.5 bg-fo-surface border-b border-border sticky top-0 z-40 w-full">
@@ -64,11 +66,21 @@ export function Topbar({ onExportPdf, onRunAll, onMenuClick }: TopbarProps) {
         </Button>
         <Button
           size="sm"
-          className="gap-1.5 sm:gap-2 bg-fo-indigo text-white hover:opacity-85 text-xs font-semibold"
+          className="gap-1.5 sm:gap-2 bg-fo-indigo text-white hover:opacity-85 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={onRunAll}
+          disabled={isRunning}
         >
-          <Play size={13} />
-          <span>Run All</span>
+          {isRunning ? (
+            <>
+              <Loader2 size={13} className="animate-spin" />
+              <span>Running...</span>
+            </>
+          ) : (
+            <>
+              <Play size={13} />
+              <span>Run All</span>
+            </>
+          )}
         </Button>
       </div>
     </div>

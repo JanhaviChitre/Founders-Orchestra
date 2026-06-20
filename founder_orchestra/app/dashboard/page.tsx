@@ -12,7 +12,7 @@
 
 "use client";
 
-import { useEffect } from "react";
+
 import { useProjectStore, getAgentStatus } from "@/lib/store/project-store";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentStatus } from "@/lib/types";
@@ -77,16 +77,13 @@ function getHeaderStatusProps(status: AgentStatus) {
 }
 
 export default function DashboardPage() {
-  const loadMockData = useProjectStore((s) => s.loadMockData);
   const input = useProjectStore((s) => s.input);
-  const agents = useProjectStore((s) => s.agents);
+  const agents = useProjectStore((s) => s.agents) || {};
+  const overallStatus = useProjectStore((s) => s.overallStatus);
+  const runOrchestration = useProjectStore((s) => s.runOrchestration);
 
-  // Auto-load mock data if no project is loaded
-  useEffect(() => {
-    if (!input) {
-      loadMockData();
-    }
-  }, [input, loadMockData]);
+  // Whether the pipeline has ever been run — gates all content sections
+  const hasRun = overallStatus !== "not-started";
 
   // Retrieve statuses of the corresponding agents
   const marketStatus = getAgentStatus(agents, "market-research");
@@ -121,6 +118,10 @@ export default function DashboardPage() {
       {/* ── Stats Row ──────────────────────────────────────────────────────── */}
       <StatsRow />
 
+      <h2 className="text-xl font-display font-semibold mb-6 mt-12 border-b border-border pb-2 text-fo-text">
+        Wave 1: Strategy & Market
+      </h2>
+
       {/* ── Market Intelligence ────────────────────────────────────────────── */}
       <section id="market">
         <SectionHeader
@@ -131,7 +132,7 @@ export default function DashboardPage() {
         />
         <div className="relative min-h-[200px]">
           <AnimatePresence mode="wait">
-            {marketStatus === "completed" ? (
+            {hasRun && marketStatus === "completed" ? (
               <motion.div
                 key="market-content"
                 initial={{ opacity: 0, y: 15 }}
@@ -170,7 +171,7 @@ export default function DashboardPage() {
         />
         <div className="relative min-h-[250px] mb-7">
           <AnimatePresence mode="wait">
-            {marketStatus === "completed" ? (
+            {hasRun && marketStatus === "completed" ? (
               <motion.div
                 key="competitor-content"
                 initial={{ opacity: 0, y: 15 }}
@@ -195,6 +196,10 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <h2 className="text-xl font-display font-semibold mb-6 mt-12 border-b border-border pb-2 text-fo-text">
+        Wave 2: Product & Marketing
+      </h2>
+
       {/* ── Product Intelligence ───────────────────────────────────────────── */}
       <section id="product">
         <SectionHeader
@@ -204,7 +209,7 @@ export default function DashboardPage() {
         />
         <div className="relative min-h-[220px]">
           <AnimatePresence mode="wait">
-            {pmStatus === "completed" ? (
+            {hasRun && pmStatus === "completed" ? (
               <motion.div
                 key="product-content"
                 initial={{ opacity: 0, y: 15 }}
@@ -233,6 +238,44 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* ── Marketing Assets ───────────────────────────────────────────────── */}
+      <section id="marketing">
+        <SectionHeader
+          title="Marketing Assets"
+          color="#F43F5E"
+          {...getHeaderStatusProps(marketingStatus)}
+        />
+        <div className="relative min-h-[180px] mb-7">
+          <AnimatePresence mode="wait">
+            {hasRun && marketingStatus === "completed" ? (
+              <motion.div
+                key="marketing-content"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.45, ease: "easeOut" }}
+              >
+                <MarketingAssets {...marketingAssetsProps} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="marketing-skeleton"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <MarketingAssetsSkeleton />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </section>
+
+      <h2 className="text-xl font-display font-semibold mb-6 mt-12 border-b border-border pb-2 text-fo-text">
+        Wave 3: Architecture & Engineering
+      </h2>
+
       {/* ── Architecture ───────────────────────────────────────────────────── */}
       <section id="architecture">
         <SectionHeader
@@ -242,7 +285,7 @@ export default function DashboardPage() {
         />
         <div className="relative min-h-[180px] mb-7">
           <AnimatePresence mode="wait">
-            {architectStatus === "completed" ? (
+            {hasRun && architectStatus === "completed" ? (
               <motion.div
                 key="architecture-content"
                 initial={{ opacity: 0, y: 15 }}
@@ -276,7 +319,7 @@ export default function DashboardPage() {
         />
         <div className="relative min-h-[220px]">
           <AnimatePresence mode="wait">
-            {engStatus === "completed" ? (
+            {hasRun && engStatus === "completed" ? (
               <motion.div
                 key="engineering-content"
                 initial={{ opacity: 0, y: 15 }}
@@ -299,40 +342,6 @@ export default function DashboardPage() {
               >
                 <GithubIssuesSkeleton />
                 <SprintBoardSkeleton />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </section>
-
-      {/* ── Marketing Assets ───────────────────────────────────────────────── */}
-      <section id="marketing">
-        <SectionHeader
-          title="Marketing Assets"
-          color="#F43F5E"
-          {...getHeaderStatusProps(marketingStatus)}
-        />
-        <div className="relative min-h-[180px]">
-          <AnimatePresence mode="wait">
-            {marketingStatus === "completed" ? (
-              <motion.div
-                key="marketing-content"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-              >
-                <MarketingAssets {...marketingAssetsProps} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="marketing-skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <MarketingAssetsSkeleton />
               </motion.div>
             )}
           </AnimatePresence>
@@ -755,23 +764,46 @@ function getMarketingAssetsData(agentOutput: any): { headline?: string; subheadl
     s.heading.toLowerCase().includes("linkedin") || s.heading.toLowerCase().includes("social")
   );
 
+  /**
+   * Guard against LLM repetition loops.
+   * If a single extracted field is longer than maxLen, it's likely stuck in a loop.
+   * We truncate at the first sentence or at maxLen chars.
+   */
+  function guardRepetition(text: string, maxLen = 250): string {
+    if (!text || text.length <= maxLen) return text;
+    // Try to truncate at the first sentence end within limits
+    const sentenceEnd = text.substring(0, maxLen).lastIndexOf(".");
+    if (sentenceEnd > 20) return text.substring(0, sentenceEnd + 1).trim();
+    return text.substring(0, maxLen).trim() + "...";
+  }
+
   const res: any = {};
   if (landingSection) {
     const content = landingSection.content;
-    const headlineMatch = content.match(/(?:Headline|Hero\s*headline|Title)\s*[:—-]\s*(.*)/i);
-    const subheadlineMatch = content.match(/(?:Subheadline|Subtitle)\s*[:—-]\s*(.*)/i);
-    const ctaMatch = content.match(/(?:CTA|Button)\s*[:—-]\s*(.*)/i);
-    const socialProofMatch = content.match(/(?:Social proof|Testimonial)\s*[:—-]\s*(.*)/i);
+    // Support both "Hero Headline:" and "Hero:"/"\*\*Hero:\*\*" and "Headline:" patterns
+    const headlineMatch = content.match(/(?:Hero\s*Headline|Headline|Hero|Title)\s*[:—\-]\s*([^\n]+)/i);
+    const subheadlineMatch = content.match(/(?:Subheadline|Sub-headline|Subtitle)\s*[:—\-]\s*([^\n]+)/i);
+    const ctaMatch = content.match(/(?:CTA|Button|Call to action)\s*[:—\-]\s*([^\n]+)/i);
+    const socialProofMatch = content.match(/(?:Social\s*Proof|Testimonial|Quote)\s*[:—\-]\s*([^\n]+)/i);
 
-    if (headlineMatch) res.headline = headlineMatch[1].replace(/\*\*/g, "").trim();
-    if (subheadlineMatch) res.subheadline = subheadlineMatch[1].replace(/\*\*/g, "").trim();
-    if (ctaMatch) res.cta = ctaMatch[1].replace(/\*\*/g, "").trim();
-    if (socialProofMatch) res.socialProof = socialProofMatch[1].replace(/\*\*/g, "").trim();
+    if (headlineMatch) res.headline = guardRepetition(headlineMatch[1].replace(/\*\*/g, "").trim());
+    if (subheadlineMatch) res.subheadline = guardRepetition(subheadlineMatch[1].replace(/\*\*/g, "").trim());
+    if (ctaMatch) res.cta = guardRepetition(ctaMatch[1].replace(/\*\*/g, "").trim(), 50);
+    if (socialProofMatch) res.socialProof = guardRepetition(socialProofMatch[1].replace(/\*\*/g, "").trim());
+
+    // If no headline found through regex, use the first non-empty content line as headline
+    if (!res.headline && content) {
+      const firstLine = content.split("\n").find((l: string) => l.trim().length > 5);
+      if (firstLine) res.headline = guardRepetition(firstLine.replace(/[*#]/g, "").trim());
+    }
   }
 
   if (linkedinSection) {
-    res.linkedinPost = linkedinSection.content;
+    // Truncate the LinkedIn post at 1500 characters to prevent runaway content
+    const rawPost = linkedinSection.content || "";
+    res.linkedinPost = rawPost.substring(0, 1500);
   }
 
   return Object.keys(res).length > 0 ? res : undefined;
 }
+

@@ -33,16 +33,43 @@ export default function LandingPage() {
     targetAudience: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.idea.trim()) return;
-    setInput({
+    if (!form.idea.trim() || submitting) return;
+
+    setSubmitting(true);
+    const startupInput = {
       startupName: form.startupName || "My Startup",
       idea: form.idea,
       industry: form.industry || undefined,
       targetAudience: form.targetAudience || undefined,
-    });
-    router.push("/dashboard");
+    };
+
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input: startupInput }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save project to database");
+      }
+
+      const project = await response.json();
+      useProjectStore.getState().loadProject(project);
+      router.push("/dashboard");
+    } catch (error) {
+      console.warn("Failed to save project to database, using client-only fallback:", error);
+      setInput(startupInput);
+      router.push("/dashboard");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDemo = () => {
@@ -133,10 +160,10 @@ export default function LandingPage() {
                 <Button
                   type="submit"
                   className="flex-1 bg-fo-indigo text-white hover:opacity-85 gap-2 font-semibold"
-                  disabled={!form.idea.trim()}
+                  disabled={!form.idea.trim() || submitting}
                 >
                   <Sparkles size={16} />
-                  Run AI Pipeline
+                  {submitting ? "Initializing Pipeline..." : "Run AI Pipeline"}
                   <ArrowRight size={16} />
                 </Button>
                 <Button

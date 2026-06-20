@@ -16,6 +16,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { useProjectStore, getAgentStatus } from "@/lib/store/project-store";
 import { AGENT_CONFIGS, ALL_AGENT_IDS } from "@/lib/agents/config";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ import {
   Building2,
   FolderKanban,
   Megaphone,
+  RotateCcw,
 } from "lucide-react";
 import type { AgentId, AgentStatus } from "@/lib/types";
 
@@ -62,7 +64,7 @@ const STATUS_BAR_COLOR: Record<AgentStatus, string> = {
 };
 
 export function AgentOrbit() {
-  const agents = useProjectStore((s) => s.agents);
+  const agents = useProjectStore((s) => s.agents) || {};
 
   // ── Count statuses for the ring ─────────────────────────────────────────
   const counts = { completed: 0, running: 0, idle: 0, error: 0 };
@@ -139,13 +141,20 @@ export function AgentOrbit() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AgentRow({ agentId }: { agentId: AgentId }) {
-  const output = useProjectStore((s) => s.agents[agentId]);
+  const output = useProjectStore((s) => s.agents?.[agentId]);
   const config = AGENT_CONFIGS[agentId];
   const status = output?.status ?? "idle";
   const badge = STATUS_BADGE[status];
   const IconComponent = AGENT_ICONS[config.icon];
   const progressValue = status === "completed" ? 100 : status === "running" ? 65 : 0;
   const isRunning = status === "running";
+
+  const overallStatus = useProjectStore((s) => s.overallStatus);
+  const retryAgent = useProjectStore((s) => s.retryAgent);
+
+  const isWorkflowComplete = overallStatus === "completed" || overallStatus === "partial";
+  const showRetry = isWorkflowComplete && status === "error";
+  const isSucceeded = status === "completed";
 
   return (
     <motion.div
@@ -203,17 +212,42 @@ function AgentRow({ agentId }: { agentId: AgentId }) {
             </div>
           </div>
 
-          {/* Status badge */}
-          <motion.div
-            key={status}
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-          >
-            <Badge className={cn("text-[11px] font-semibold", badge.className)}>
-              {badge.label}
-            </Badge>
-          </motion.div>
+          {/* Status badge & Retry button */}
+          <div className="flex items-center gap-2">
+            <motion.div
+              key={status}
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              <Badge className={cn("text-[11px] font-semibold", badge.className)}>
+                {badge.label}
+              </Badge>
+            </motion.div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn(
+                "h-7 w-7 rounded-lg border-border bg-transparent text-fo-sub hover:text-fo-indigo hover:border-fo-indigo transition-colors flex items-center justify-center p-0",
+                showRetry ? "cursor-pointer opacity-100" : "opacity-40 cursor-not-allowed"
+              )}
+              disabled={!showRetry}
+              onClick={(e) => {
+                e.stopPropagation();
+                retryAgent(agentId);
+              }}
+              title={
+                isSucceeded
+                  ? "Task completed successfully"
+                  : !isWorkflowComplete
+                  ? "Workflow is still running"
+                  : "Retry agent task"
+              }
+            >
+              <RotateCcw size={12} className={status === "running" ? "animate-spin" : ""} />
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

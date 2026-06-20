@@ -55,6 +55,7 @@ export interface AgentConfig {
   icon: string;              // Lucide icon name (see: https://lucide.dev/icons)
   color: string;             // Tailwind color class for UI theming
   model: string;             // Gemini model to use (e.g. "gemini-2.5-flash")
+  maxTokens: number;         // Capped token output per agent
   systemPrompt: string;      // Instructions that tell the AI how to behave
   wave: 1 | 2 | 3;          // Execution order: wave 1 runs first, then 2, then 3
   tools?: AgentTool[];       // Which tools this agent can use (empty = no tools)
@@ -80,6 +81,7 @@ export interface AgentOutput {
   startedAt?: string;        // ISO timestamp when agent started
   completedAt?: string;      // ISO timestamp when agent finished
   error?: string;            // Error message if status is "error"
+  latestReasoning?: string;  // Partial streaming text from the agent's reasoning
 }
 
 /**
@@ -219,6 +221,7 @@ export interface StartupInput {
   targetAudience?: string;   // Optional: Who is this for?
   budget?: string;           // Optional: Estimated budget range
   additionalContext?: string; // Optional: Any extra info
+  previousResults?: Record<string, any>;
 }
 
 /**
@@ -241,12 +244,14 @@ export interface ProjectState {
  * - in-progress: At least one agent is running
  * - completed:   All agents finished successfully
  * - partial:     Some agents completed, some errored
+ * - paused:      Orchestration is currently suspended
  */
 export type OrchestrationStatus =
   | "not-started"
   | "in-progress"
   | "completed"
-  | "partial";
+  | "partial"
+  | "paused";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // USER / AUTH TYPES

@@ -13,6 +13,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
+import { renderMarkdown } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -110,7 +111,7 @@ export function MarketSizing({ entries = DEFAULT_ENTRIES, insight = DEFAULT_INSI
         {insight && (
           <div className="mt-3 p-2.5 rounded-lg bg-[rgba(16,185,129,0.07)] border border-[rgba(16,185,129,0.15)]">
             <div className="text-[11px] font-bold text-fo-emerald mb-1">AI INSIGHT</div>
-            <div className="text-[12.5px] text-fo-sub leading-relaxed">{insight}</div>
+            <div className="text-[12.5px] text-fo-sub leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(insight) }} />
           </div>
         )}
       </CardContent>

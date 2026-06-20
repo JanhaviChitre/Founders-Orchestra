@@ -4,40 +4,155 @@
  * =============================================================================
  *
  * This file provides functions that RUN AI agents using LangChain/LangGraph.
- * There are two modes:
- *
- * 1. runAgentWithTools() — For agents that need web search (Tavily)
- *    Uses a LangGraph ReAct agent that can search the web, reason about
- *    results, and search again until it has enough data. Then formats
- *    the result into our structured schema.
- *
- * 2. runAgent() — For agents that DON'T need tools
- *    Uses a simple ChatGoogleGenerativeAI.withStructuredOutput() call.
- *    Directly returns structured JSON matching our Zod schema.
- *
- * WHY TWO MODES?
- * Gemini can't reliably do tool-calling AND structured output in the same
- * call. So tool-using agents have a 2-step process:
- *   Step 1: ReAct agent gathers research (tool-calling mode)
- *   Step 2: Formatter structures the research (structured output mode)
+ * We utilize ChatGroq with llama-3.3-70b-versatile and native structured output.
  *
  * Owner: AI/Agent Lead (Team Member B)
  * =============================================================================
  */
 
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { SystemMessage, HumanMessage, isAIMessage } from "@langchain/core/messages";
+import { ChatGroq } from "@langchain/groq";
+import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import { TavilySearch } from "@langchain/tavily";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { z } from "zod";
 import type { AgentConfig, AgentOutput, StartupInput } from "@/lib/types";
+import { jsonrepair } from "jsonrepair";
 
 type AgentProgressCallback = (partialText: string) => void;
 
-function extractChunkText(chunk: any): string {
-  if (!chunk) return "";
-  if (typeof chunk.text === "string") return chunk.text;
-  if (typeof chunk.content === "string") return chunk.content;
+let isTavilyOffline = false;
+
+// Round-robin key alternation to distribute API rate limits
+const groqKeys = Object.keys(process.env)
+  .filter(key => key.startsWith("GROQ_API_KEY_"))
+  .sort()
+  .map(key => process.env[key])
+  .filter(Boolean) as string[];
+
+if (groqKeys.length === 0 && process.env.GROQ_API_KEY) {
+  groqKeys.push(process.env.GROQ_API_KEY);
+}
+
+let keyIndex = 0;
+const getNextKey = () => groqKeys[keyIndex++ % groqKeys.length];
+
+function getFailedGeneration(error: any): string | undefined {
+  if (!error) return undefined;
+  if (error.error?.error?.failed_generation) return error.error.error.failed_generation;
+  if (error.failed_generation) return error.failed_generation;
+  
+  const msg = error.message;
+  if (typeof msg === "string") {
+    try {
+      const firstBrace = msg.indexOf("{");
+      if (firstBrace !== -1) {
+        const parsed = JSON.parse(msg.substring(firstBrace));
+        const gen = parsed?.error?.failed_generation || parsed?.failed_generation;
+        if (typeof gen === "string") return gen;
+      }
+    } catch (_) {
+      // Ignore parsing errors
+    }
+    return msg;
+  }
+  return undefined;
+}
+
+function sanitizeParsedOutput(parsed: any) {
+  if (!parsed || typeof parsed !== "object") return;
+  
+  if (!parsed.metadata) {
+    parsed.metadata = {};
+  } else if (typeof parsed.metadata === "object") {
+    for (const key of Object.keys(parsed.metadata)) {
+      if (parsed.metadata[key] !== undefined && parsed.metadata[key] !== null) {
+        parsed.metadata[key] = String(parsed.metadata[key]);
+      }
+    }
+  }
+
+  if (Array.isArray(parsed.sections)) {
+    const allowedKeys = ["heading", "content", "data", "chartType", "tableData"];
+    const allowedChartTypes = ["bar", "pie", "radar", "line", "area", "funnel"];
+    for (const section of parsed.sections) {
+      if (section && typeof section === "object") {
+        // Strip additional keys that are not allowed by Zod
+        for (const key of Object.keys(section)) {
+          if (!allowedKeys.includes(key)) {
+            delete section[key];
+          }
+        }
+        
+        // Sanitize chartType
+        if (section.chartType && !allowedChartTypes.includes(section.chartType)) {
+          delete section.chartType;
+        }
+        
+        // Sanitize chart data points
+        if (Array.isArray(section.data)) {
+          for (const pt of section.data) {
+            if (pt && typeof pt === "object") {
+              if (pt.name !== undefined && typeof pt.name !== "string") {
+                pt.name = String(pt.name);
+              }
+              if (pt.value === undefined) {
+                pt.value = 0;
+              } else if (typeof pt.value !== "number") {
+                const parsedVal = Number(pt.value);
+                if (!isNaN(parsedVal)) {
+                  pt.value = parsedVal;
+                } else if (typeof pt.value === "string") {
+                  const items = pt.value.split(",").map((s: string) => s.trim()).filter(Boolean);
+                  pt.value = items.length || 0;
+                } else {
+                  pt.value = 0;
+                }
+              }
+            }
+          }
+        }
+
+        // Sanitize tableData
+        if (section.tableData && typeof section.tableData === "object") {
+          const td = section.tableData;
+          if (Array.isArray(td.headers)) {
+            td.headers = td.headers.map((h: any) => String(h === undefined || h === null ? "" : h));
+          } else {
+            td.headers = [];
+          }
+          if (Array.isArray(td.rows)) {
+            td.rows = td.rows.map((row: any) => {
+              if (Array.isArray(row)) {
+                return row.map((cell: any) => String(cell === undefined || cell === null ? "" : cell));
+              }
+              return [];
+            });
+          } else {
+            td.rows = [];
+          }
+        }
+      }
+    }
+  }
+}
+
+function getMessageText(content: any): string {
+  if (!content) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((c) => {
+      if (typeof c === "string") return c;
+      if (c && typeof c === "object") {
+        if (typeof c.text === "string") return c.text;
+        if (typeof c.content === "string") return c.content;
+      }
+      return "";
+    }).filter(Boolean).join("\n");
+  }
+  if (typeof content === "object") {
+    if (typeof content.text === "string") return content.text;
+    if (typeof content.content === "string") return content.content;
+  }
   return "";
 }
 
@@ -45,8 +160,6 @@ function extractChunkText(chunk: any): string {
 // OUTPUT SCHEMA (Zod)
 // ─────────────────────────────────────────────────────────────────────────────
 // Zod validates that the AI returns data in the exact shape we expect.
-// If the AI returns malformed data, Zod catches it.
-// Learn more: https://zod.dev
 
 /** Schema for a single chart data point */
 const chartDataPointSchema = z.object({
@@ -72,14 +185,22 @@ const outputSectionSchema = z.object({
     .describe("Optional table data"),
 });
 
-/** The complete output schema that every agent must return */
 const agentOutputSchema = z.object({
   title: z.string().describe("Title of this analysis"),
   summary: z.string().describe("1-2 sentence executive summary"),
   sections: z.array(outputSectionSchema)
     .describe("Detailed output broken into logical sections"),
-  metadata: z.record(z.string(), z.unknown())
-    .describe("Extra metadata like scores, counts, or key metrics"),
+  metadata: z.object({
+    viabilityScore: z.string().optional().describe("0-100 PMF viability score"),
+    riskLevel: z.string().optional().describe("Risk level: Low/Medium/High"),
+    tam: z.string().optional().describe("Total Addressable Market, e.g. $42B"),
+    competitorCount: z.string().optional().describe("Number of competitors mapped"),
+    trendCount: z.string().optional().describe("Number of market trends mapped"),
+    totalIssues: z.string().optional().describe("Total GitHub issues generated"),
+    storyCount: z.string().optional().describe("Number of user stories"),
+    epicCount: z.string().optional().describe("Number of epics"),
+    phaseCount: z.string().optional().describe("Number of roadmap phases"),
+  }).describe("Extra metadata like scores, counts, or key metrics"),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,8 +209,6 @@ const agentOutputSchema = z.object({
 
 /**
  * Runs an AI agent WITHOUT tools (PM, Architect, Eng Manager).
- * Uses ChatGoogleGenerativeAI.withStructuredOutput() for a direct
- * prompt → structured JSON response.
  *
  * @param config   - The agent's configuration (from config.ts)
  * @param input    - The founder's startup idea
@@ -103,52 +222,96 @@ export async function runAgent(
   onProgress?: AgentProgressCallback
 ): Promise<AgentOutput> {
   const startedAt = new Date().toISOString();
+  const maxAttempts = Math.max(5, groqKeys.length);
 
-  try {
-    const userPrompt = buildPrompt(input, context);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const apiKey = getNextKey();
+      const userPrompt = buildPrompt(input, context);
 
-    // ── Create model with structured output ──────────────────────────────
-    const model = new ChatGoogleGenerativeAI({
-      model: config.model,
-      apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-      maxRetries: 5,
-      streaming: true,
-    });
+      const model = new ChatGroq({
+        model: config.model,
+        apiKey: apiKey,
+        temperature: 0.2,
+        maxTokens: config.maxTokens,
+      });
 
-    const structuredModel = model.withStructuredOutput(agentOutputSchema);
+      const result = await model.withStructuredOutput(agentOutputSchema).invoke([
+        new SystemMessage(config.systemPrompt),
+        new HumanMessage(userPrompt),
+      ]);
 
-    // ── Call the model in streaming mode and aggregate chunks ─────────────
-    const stream = await structuredModel.stream([
-      new SystemMessage(config.systemPrompt),
-      new HumanMessage(userPrompt),
-    ]);
+      return {
+        agentId: config.id,
+        status: "completed",
+        title: result.title,
+        summary: result.summary,
+        sections: result.sections,
+        metadata: result.metadata,
+        startedAt,
+        completedAt: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      const isRateLimitOrBadRequest = 
+        error?.status === 400 || 
+        error?.status === 429 || 
+        errorMsg.includes("400") || 
+        errorMsg.includes("429") || 
+        errorMsg.includes("rate_limit") || 
+        errorMsg.includes("tool_use_failed");
 
-    let aggregatedText = "";
-    for await (const chunk of stream) {
-      const partial = extractChunkText(chunk);
-      if (partial) {
-        aggregatedText += partial;
-        onProgress?.(aggregatedText);
+      if (isRateLimitOrBadRequest && attempt < maxAttempts) {
+        console.warn(`[Agent: ${config.name}] API key failed (Status: ${error?.status || 'unknown'}, Msg: ${errorMsg.substring(0, 100)}). Retrying (attempt ${attempt}/${maxAttempts})...`);
+        continue;
       }
+
+      const failedGen = getFailedGeneration(error);
+      if (failedGen && failedGen.includes("{")) {
+        console.warn(`[Agent: ${config.name}] Attempting recovery from failed generation...`);
+        try {
+          const firstBrace = failedGen.indexOf("{");
+          const lastBrace = failedGen.lastIndexOf("}");
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            let jsonStr = failedGen.substring(firstBrace, lastBrace + 1);
+            
+            // Apply custom regex fixes for common Groq structural syntax bugs
+            jsonStr = jsonStr.replace(/\}\s*,\s*"heading"\s*:/g, '}, {"heading":');
+            jsonStr = jsonStr.replace(/\}+\s*,\s*"metadata"\s*:/g, '}], "metadata":');
+            
+            jsonStr = jsonStr.replace(/\}\}\s*,\s*"type"\s*:\s*"(object|array)"/g, '}');
+            const repaired = jsonrepair(jsonStr);
+            const parsed = JSON.parse(repaired);
+            if (typeof parsed.sections === "string") {
+              try {
+                parsed.sections = JSON.parse(parsed.sections);
+              } catch {
+                parsed.sections = [];
+              }
+            }
+            sanitizeParsedOutput(parsed);
+            const validated = agentOutputSchema.parse(parsed);
+            
+            return {
+              agentId: config.id,
+              status: "completed",
+              title: validated.title,
+              summary: validated.summary,
+              sections: validated.sections,
+              metadata: validated.metadata,
+              startedAt,
+              completedAt: new Date().toISOString(),
+            };
+          }
+        } catch (recoveryError) {
+          console.error(`[Agent: ${config.name}] Recovery failed:`, recoveryError);
+        }
+      }
+      console.error(`[Agent: ${config.name}] Error:`, error);
+      return createErrorOutput(config, startedAt, error);
     }
-
-    const result = await stream.app();
-
-    return {
-      agentId: config.id,
-      status: "completed",
-      title: result.title,
-      summary: result.summary,
-      sections: result.sections,
-      metadata: result.metadata,
-      startedAt,
-      completedAt: new Date().toISOString(),
-      latestReasoning: aggregatedText,
-    };
-  } catch (error) {
-    console.error(`[Agent: ${config.name}] Error:`, error);
-    return createErrorOutput(config, startedAt, error);
   }
+  return createErrorOutput(config, startedAt, new Error("All Groq API keys exhausted or failed."));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,9 +320,6 @@ export async function runAgent(
 
 /**
  * Runs an AI agent WITH tools (Advisor, Market Research, Marketing).
- * Two-step process:
- *   1. ReAct agent reasons and calls Tavily web search
- *   2. Formatter structures the result into our schema
  *
  * @param config   - The agent's configuration (from config.ts)
  * @param input    - The founder's startup idea
@@ -169,77 +329,158 @@ export async function runAgent(
 export async function runAgentWithTools(
   config: AgentConfig,
   input: StartupInput,
-  context?: string
+  context?: string,
+  onProgress?: AgentProgressCallback
 ): Promise<AgentOutput> {
   const startedAt = new Date().toISOString();
 
-  try {
-    const userPrompt = buildPrompt(input, context);
-
-    // ── Step 1: Create ReAct agent with tools ────────────────────────────
-    const model = new ChatGoogleGenerativeAI({
-      model: config.model,
-      apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-      maxRetries: 5,
-    });
-
-    const tools = [
-      new TavilySearch({
-        maxResults: 3,
-      }),
-    ];
-
-    // createReactAgent handles the ReAct reasoning loop:
-    // Think → Act (search) → Observe → Think → ... → Final answer
-    const agent = createReactAgent({
-      llm: model,
-      tools,
-    });
-
-    // Run the agent — it will search the web as needed
-    const agentResult = await agent.invoke({
-      messages: [
-        new SystemMessage(config.systemPrompt),
-        new HumanMessage(userPrompt),
-      ],
-    });
-
-    // Extract the agent's final message (the last AI message)
-    const lastMessage = agentResult.messages[agentResult.messages.length - 1];
-    const researchText = typeof lastMessage.content === "string"
-      ? lastMessage.content
-      : JSON.stringify(lastMessage.content);
-
-    // ── Step 2: Format research into structured output ───────────────────
-    const formatter = new ChatGoogleGenerativeAI({
-      model: config.model,
-      apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-      maxRetries: 5,
-    });
-
-    const structuredFormatter = formatter.withStructuredOutput(agentOutputSchema);
-
-    const result = await structuredFormatter.invoke([
-      new SystemMessage(
-        "You are a data formatter. Take the following research output and structure it into the required JSON format. Preserve all data, numbers, and insights exactly."
-      ),
-      new HumanMessage(researchText),
-    ]);
-
-    return {
-      agentId: config.id,
-      status: "completed",
-      title: result.title,
-      summary: result.summary,
-      sections: result.sections,
-      metadata: result.metadata,
-      startedAt,
-      completedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    console.error(`[Agent: ${config.name}] Error (with tools):`, error);
-    return createErrorOutput(config, startedAt, error);
+  const tavilyKey = (process.env as any).TAVILY_API_KEY;
+  if (isTavilyOffline || !tavilyKey || tavilyKey.includes("placeholder")) {
+    console.warn(`[runAgentWithTools] Tavily is offline or API key is missing. Bypassing ReAct loop and calling runAgent directly for ${config.name}`);
+    onProgress?.("Web search is currently offline. Utilizing internal knowledge base...");
+    return runAgent(config, input, context, onProgress);
   }
+
+  const maxAttempts = Math.max(5, groqKeys.length);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const apiKey = getNextKey();
+      const userPrompt = buildPrompt(input, context);
+
+      const model = new ChatGroq({
+        model: config.model,
+        apiKey: apiKey,
+        temperature: 0.2,
+        maxTokens: config.maxTokens,
+      });
+
+      onProgress?.("Initiating web research and market analysis...");
+
+      const searchTool = new TavilySearch({
+        maxResults: 5,
+        searchDepth: "advanced",
+      });
+
+      // Override the tool schema to only expose the query parameter.
+      // This prevents the LLM from generating invalid parameters (like topic: "health")
+      // which cause Groq to reject the tool call with a 400 error.
+      searchTool.schema = z.object({
+        query: z.string().describe("The search query to look up information for."),
+      }) as any;
+
+      const originalCall = searchTool._call.bind(searchTool);
+      (searchTool as any)._call = async (input: any, runManager?: any) => {
+        const query = typeof input === "string" ? input : (input?.query || "");
+        onProgress?.(`Searching: "${query}"`);
+        try {
+          const res = await originalCall(input, runManager);
+          const resStr = typeof res === "string" ? res : JSON.stringify(res || {});
+          const resAny = res as any;
+          const isErrorResponse = 
+            resStr.includes("Unauthorized") || 
+            resStr.includes("401") || 
+            resStr.includes("API key") || 
+            (resAny && typeof resAny === "object" && (resAny.status === 401 || resAny.status === 403 || resAny.ok === false));
+          if (isErrorResponse) {
+            console.warn("[TavilySearch] Unauthorized response detected. Marking Tavily as offline.");
+            isTavilyOffline = true;
+          }
+          return res;
+        } catch (err: any) {
+          console.warn(`[TavilySearch Error] Gracefully falling back:`, err.message || err);
+          isTavilyOffline = true;
+          return "Search is currently offline, rate-limited, or unauthorized. DO NOT attempt to search again. Please proceed and answer based on your internal knowledge.";
+        }
+      };
+
+      const tools = [searchTool];
+
+      const agent = createReactAgent({
+        llm: model,
+        tools,
+        responseFormat: agentOutputSchema,
+      });
+
+      const agentResult = await agent.invoke({
+        messages: [
+          new SystemMessage(config.systemPrompt),
+          new HumanMessage(userPrompt),
+        ],
+      });
+
+      const result = (agentResult as any).structuredResponse;
+
+      return {
+        agentId: config.id,
+        status: "completed",
+        title: result.title,
+        summary: result.summary,
+        sections: result.sections,
+        metadata: result.metadata,
+        startedAt,
+        completedAt: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      const isRateLimitOrBadRequest = 
+        error?.status === 400 || 
+        error?.status === 429 || 
+        errorMsg.includes("400") || 
+        errorMsg.includes("429") || 
+        errorMsg.includes("rate_limit") || 
+        errorMsg.includes("tool_use_failed");
+
+      if (isRateLimitOrBadRequest && attempt < maxAttempts) {
+        console.warn(`[Agent: ${config.name}] API key failed in tool agent (Status: ${error?.status || 'unknown'}, Msg: ${errorMsg.substring(0, 100)}). Retrying (attempt ${attempt}/${maxAttempts})...`);
+        continue;
+      }
+
+      const failedGen = getFailedGeneration(error);
+      if (failedGen && failedGen.includes("{")) {
+        console.warn(`[Agent: ${config.name}] Attempting recovery from failed generation in tool agent...`);
+        try {
+          const firstBrace = failedGen.indexOf("{");
+          const lastBrace = failedGen.lastIndexOf("}");
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            let jsonStr = failedGen.substring(firstBrace, lastBrace + 1);
+            
+            // Apply custom regex fixes for common Groq structural syntax bugs
+            jsonStr = jsonStr.replace(/\}\s*,\s*"heading"\s*:/g, '}, {"heading":');
+            jsonStr = jsonStr.replace(/\}+\s*,\s*"metadata"\s*:/g, '}], "metadata":');
+            
+            jsonStr = jsonStr.replace(/\}\}\s*,\s*"type"\s*:\s*"(object|array)"/g, '}');
+            const repaired = jsonrepair(jsonStr);
+            const parsed = JSON.parse(repaired);
+            if (typeof parsed.sections === "string") {
+              try {
+                parsed.sections = JSON.parse(parsed.sections);
+              } catch {
+                parsed.sections = [];
+              }
+            }
+            sanitizeParsedOutput(parsed);
+            const validated = agentOutputSchema.parse(parsed);
+            
+            return {
+              agentId: config.id,
+              status: "completed",
+              title: validated.title,
+              summary: validated.summary,
+              sections: validated.sections,
+              metadata: validated.metadata,
+              startedAt,
+              completedAt: new Date().toISOString(),
+            };
+          }
+        } catch (recoveryError) {
+          console.error(`[Agent: ${config.name}] Recovery failed in tool agent:`, recoveryError);
+        }
+      }
+      console.error(`[Agent: ${config.name}] Error (with tools):`, error);
+      return createErrorOutput(config, startedAt, error);
+    }
+  }
+  return createErrorOutput(config, startedAt, new Error("All Groq API keys exhausted or failed in tool agent."));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

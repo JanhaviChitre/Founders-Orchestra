@@ -74,7 +74,7 @@ const ProjectSchema = new Schema<IProject>(
     // Overall pipeline status
     overallStatus: {
       type: String,
-      enum: ["not-started", "in-progress", "completed", "partial"],
+      enum: ["not-started", "in-progress", "completed", "partial", "paused"],
       default: "not-started",
     },
   },

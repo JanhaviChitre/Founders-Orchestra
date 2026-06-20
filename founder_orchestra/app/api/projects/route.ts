@@ -82,3 +82,38 @@ export async function POST(request: Request) {
     );
   }
 }
+
+// ── DELETE: Delete an existing project ──────────────────────────────────────
+export async function DELETE(request: Request) {
+  try {
+    await connectDB();
+
+    const { searchParams } = new URL(request.url);
+    const validationResult = validateQuery(searchParams, getProjectQuerySchema);
+    if (!validationResult.success) return validationResult.response;
+    const { id: projectId } = validationResult.data;
+
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const project = await Project.findByIdAndDelete(projectId);
+    if (!project) {
+      return NextResponse.json(
+        { error: "Project not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, message: "Project deleted successfully" });
+  } catch (error) {
+    console.error("[/api/projects DELETE] Error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

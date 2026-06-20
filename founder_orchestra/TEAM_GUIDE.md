@@ -111,30 +111,6 @@ founder_orchestra/
 ---
 
 ### Team Member B: AI/Agent Lead
-**Focus:** The AI agents — what they do, how they think, what they output.
-
-| File/Folder | What to do |
-|---|---|
-| `lib/agents/config.ts` | Refine system prompts and add few-shot examples |
-| `lib/agents/base-agent.ts` | Implement streaming and LangGraph checkpoints |
-| `lib/agents/orchestrator.ts` | Improve multi-agent context sharing |
-
-**Key TODOs:**
-- [x] Refine system prompts in `config.ts` for even better, more domain-specific structured outputs.
-- [x] Add few-shot examples to prompts (show the AI exactly what good output looks like).
-- [ ] Implement streaming support so partial agent reasoning text streams into the UI in real-time.
-- [ ] Add human-in-the-loop approvals using LangGraph checkpointing (e.g., pausing after architecture design for user feedback).
-- [ ] Experiment with different Gemini models (Flash vs. Pro) to optimize for speed vs. deep reasoning.
-- [ ] Expand the Tavily web search depth and consider adding more tools (e.g., GitHub repo scraping).
-
-**Tips:**
-- System prompts are the #1 lever for output quality — iterate on them heavily!
-- Use Google AI Studio to test prompts quickly: [aistudio.google.com](https://aistudio.google.com).
-- Reference the [LangGraph.js documentation](https://langchain-ai.github.io/langgraphjs/) for checkpointing & state management.
-
----
-
-### Team Member C: Backend Lead
 **Focus:** Database, authentication, APIs, PDF generation, deployment.
 
 | File/Folder | What to do |

@@ -51,15 +51,22 @@ type OnProgressCallback = (event: {
  */
 export async function orchestrate(
   input: StartupInput,
-  onProgress?: OnProgressCallback
+  onProgress?: OnProgressCallback,
+  targetWaves: readonly (1 | 2 | 3)[] = [1, 2, 3],
+  targetAgents?: AgentId[]
 ): Promise<Record<AgentId, AgentOutput>> {
   const results: Partial<Record<AgentId, AgentOutput>> = {};
 
-  for (const wave of [1, 2, 3] as const) {
-    const waveAgents = getAgentsByWave(wave);
-    const contextFromPreviousWaves = buildContext(results);
+  for (const wave of targetWaves) {
+    let waveAgents = getAgentsByWave(wave);
+    if (targetAgents) {
+      waveAgents = waveAgents.filter((a) => targetAgents.includes(a.id));
+    }
+    if (waveAgents.length === 0) continue;
+    const contextFromPreviousWaves = buildContext(results, input.previousResults); // We will need to pass previousResults if resuming
 
     for (const agentConfig of waveAgents) {
+
       // ── Notify: agent starting ──────────────────────────────────────
       onProgress?.({ type: "agent-start", agentId: agentConfig.id });
 
@@ -118,9 +125,6 @@ export async function orchestrate(
           error: errorOutput.error,
         });
       }
-
-      // Add a small 1-second delay between agents to prevent hitting API rate limits
-      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
 
@@ -132,17 +136,22 @@ export async function orchestrate(
 // ─────────────────────────────────────────────────────────────────────────────
 
 function buildContext(
-  results: Partial<Record<AgentId, AgentOutput>>
+  results: Partial<Record<AgentId, AgentOutput>>,
+  previousResults?: Record<string, any>
 ): string {
-  const entries = Object.entries(results);
+  // Merge current wave results with previous results for full context
+  const merged = { ...(previousResults || {}), ...results };
+  const entries = Object.entries(merged);
   if (entries.length === 0) return "";
 
   return entries
     .filter(([, output]) => output?.status === "completed")
     .map(([agentId, output]) => {
       const config = AGENT_CONFIGS[agentId as AgentId];
-      return `### ${config.name}\n${output!.summary}\n${
-        output!.sections.map((s) => `#### ${s.heading}\n${s.content}`).join("\n\n")
+      // Fallback name if agentId isn't in config (e.g. legacy/mock data)
+      const name = config?.name || agentId;
+      return `### ${name}\n${output.summary}\n${
+        output.sections?.map((s: any) => `#### ${s.heading}\n${s.content}`).join("\n\n") || ""
       }`;
     })
     .join("\n\n---\n\n");

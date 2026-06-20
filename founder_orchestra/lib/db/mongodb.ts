@@ -58,16 +58,32 @@ export async function connectDB(): Promise<typeof mongoose> {
 
   // ── Reuse existing connection if available ──────────────────────────────
   if (global.mongooseConnection) {
-    return global.mongooseConnection;
+    try {
+      const conn = await global.mongooseConnection;
+      if (mongoose.connection.readyState === 1) {
+        return conn;
+      }
+      global.mongooseConnection = undefined;
+    } catch (e) {
+      global.mongooseConnection = undefined;
+    }
   }
 
   // ── Create new connection ──────────────────────────────────────────────
-  global.mongooseConnection = mongoose.connect(MONGODB_URI, {
-    // These options optimize the connection for production use
+  const connectionPromise = mongoose.connect(MONGODB_URI, {
     bufferCommands: false, // Disable buffering — fail fast if not connected
   });
 
-  return global.mongooseConnection;
+  global.mongooseConnection = connectionPromise;
+
+  try {
+    await connectionPromise;
+  } catch (error) {
+    global.mongooseConnection = undefined;
+    throw error;
+  }
+
+  return connectionPromise;
 }
 
 /**

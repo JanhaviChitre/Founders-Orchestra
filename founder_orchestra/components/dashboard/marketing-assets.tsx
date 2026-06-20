@@ -25,9 +25,9 @@ interface MarketingAssetsProps {
 }
 
 const DEFAULT_HEADLINE = "Your AI fitness coach that works as hard as you do — in 10 minutes a day.";
-const DEFAULT_SUBHEADLINE = "No gym. No schedules. Just a coach that adapts to your body, your calendar, and your goals. Built for people who don't have time to not be fit.";
+const DEFAULT_SUBHEADLINE = "No gym. No schedules. Just a coach that adapts to your body, your calendar, and your goals.";
 const DEFAULT_CTA = "Start free →";
-const DEFAULT_SOCIAL_PROOF = "“I've tried 12 fitness apps. This is the only one that felt like it actually knew me.” — Sarah K., Product Manager";
+const DEFAULT_SOCIAL_PROOF = "“I’ve tried 12 fitness apps. This is the only one that felt like it actually knew me.” — Sarah K., Product Manager";
 const DEFAULT_LINKEDIN = `We just shipped something I've been dreaming about for 2 years.
 
 An AI fitness coach that understands you're a busy professional — not a gym rat.
@@ -40,6 +40,28 @@ We're launching to a waitlist of 1,200 people next month. Spots are limited.
 
 #FitnessAI #ProductLaunch #StartupLife #HealthTech`;
 
+/**
+ * Strip and render a raw markdown string to clean display text.
+ * Removes ### headings, ** bold markers, and \n literal escape sequences.
+ * Limits content length to prevent runaway repetition from polluting the UI.
+ */
+function sanitizeMarkdown(text: string, maxLength = 2000): string {
+  if (!text) return "";
+  return text
+    // Truncate at max length to avoid rendering infinite loops
+    .substring(0, maxLength)
+    // Remove leading markdown headings (###, ##, #)
+    .replace(/^#{1,6}\s+/gm, "")
+    // Remove bold/italic markers (**, __, *, _)
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/([*_])(.*?)\1/g, "$2")
+    // Convert literal \n escape sequences to real newlines
+    .replace(/\\n/g, "\n")
+    // Strip excessive repeated whitespace/newlines (more than 2 in a row)
+    .replace(/(\n{3,})/g, "\n\n")
+    .trim();
+}
+
 export function MarketingAssets({
   headline = DEFAULT_HEADLINE,
   subheadline = DEFAULT_SUBHEADLINE,
@@ -47,9 +69,16 @@ export function MarketingAssets({
   socialProof = DEFAULT_SOCIAL_PROOF,
   linkedinPost = DEFAULT_LINKEDIN,
 }: MarketingAssetsProps) {
+  // Sanitize the linkedin post to remove raw markdown and truncate runaway content
+  const cleanLinkedinPost = sanitizeMarkdown(linkedinPost, 1500);
+  const cleanHeadline = sanitizeMarkdown(headline, 200);
+  const cleanSubheadline = sanitizeMarkdown(subheadline, 300);
+  const cleanCta = sanitizeMarkdown(cta, 50);
+  const cleanSocialProof = sanitizeMarkdown(socialProof, 300);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-10">
-      {/* ── Landing Page Copy ─────────────────────────────────────────────── */}
+      {/* ── Landing Page Copy ─────────────────────────────────────────────────────── */}
       <Card>
         <CardContent className="pt-5 pb-5">
           <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-4 flex items-center gap-2">
@@ -63,13 +92,13 @@ export function MarketingAssets({
               Hero — Above the Fold
             </div>
             <div className="font-display text-[17px] font-bold leading-snug mb-1.5">
-              {headline}
+              {cleanHeadline}
             </div>
             <div className="text-[13px] text-fo-sub leading-relaxed">
-              {subheadline}
+              {cleanSubheadline}
             </div>
             <Button size="sm" className="mt-2.5 bg-fo-indigo text-white text-xs font-semibold hover:opacity-85">
-              {cta}
+              {cleanCta}
             </Button>
           </div>
 
@@ -79,13 +108,13 @@ export function MarketingAssets({
               Social Proof Hook
             </div>
             <div className="text-[13px] text-fo-sub leading-relaxed italic">
-              {socialProof}
+              {cleanSocialProof}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* ── LinkedIn Post ─────────────────────────────────────────────────── */}
+      {/* ── LinkedIn Post ───────────────────────────────────────────────────────── */}
       <Card>
         <CardContent className="pt-5 pb-5">
           <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-4 flex items-center gap-2">
@@ -93,34 +122,36 @@ export function MarketingAssets({
             LinkedIn Post Draft
           </div>
 
-          <div className="p-3.5 rounded-lg bg-[rgba(255,255,255,.025)] border border-[rgba(255,255,255,.05)] text-[13.5px] leading-relaxed text-fo-sub white-space-pre-line">
-            {linkedinPost.split("\n\n").map((para, i) => {
-              const isHighlight = para.trim().startsWith("→");
-              const isHashtags = para.trim().startsWith("#");
-              if (isHighlight) {
+          <div className="p-3.5 rounded-lg bg-[rgba(255,255,255,.025)] border border-[rgba(255,255,255,.05)] text-[13.5px] leading-relaxed text-fo-sub space-y-3">
+            {cleanLinkedinPost.split("\n\n").map((para, i) => {
+              const trimmed = para.trim();
+              if (!trimmed) return null;
+              const isArrow = trimmed.startsWith("→") || trimmed.startsWith("->");
+              const isHashtags = trimmed.startsWith("#") && !trimmed.includes(" ");
+              const isHashtagLine = /^#[A-Za-z]/.test(trimmed);
+              if (isArrow) {
                 return (
                   <p key={i} className="text-fo-indigo font-semibold">
-                    {para}
+                    {trimmed}
                   </p>
                 );
               }
-              if (isHashtags) {
+              if (isHashtagLine) {
                 return (
                   <p key={i} className="text-xs text-fo-muted">
-                    {para}
+                    {trimmed}
                   </p>
                 );
               }
-              // First paragraph is usually headline highlight
               if (i === 0) {
                 return (
                   <p key={i} className="text-fo-text font-semibold">
-                    {para}
+                    {trimmed}
                   </p>
                 );
               }
-              return <p key={i}>{para}</p>;
-            })}
+              return <p key={i} className="text-fo-sub">{trimmed}</p>;
+            }).filter(Boolean)}
           </div>
         </CardContent>
       </Card>

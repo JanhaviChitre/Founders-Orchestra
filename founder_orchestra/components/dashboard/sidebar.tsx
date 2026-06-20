@@ -30,7 +30,10 @@ import {
   Rocket,
   Megaphone,
   History,
+  Plus,
+  LogOut,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 interface NavItem {
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -95,7 +98,7 @@ interface SidebarProps {
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const agents = useProjectStore((s) => s.agents);
+  const agents = useProjectStore((s) => s.agents) || {};
   const activeSection = useProjectStore((s) => s.activeSection);
   const setActiveSection = useProjectStore((s) => s.setActiveSection);
 
@@ -181,6 +184,7 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({ agents, activeSection, pathname, onNavClick }: SidebarContentProps) {
+  const router = useRouter();
   return (
     <>
       {/* ── Logo ─────────────────────────────────────────────────────────── */}
@@ -191,6 +195,20 @@ function SidebarContent({ agents, activeSection, pathname, onNavClick }: Sidebar
         <span className="font-display text-lg font-bold tracking-tight">
           Founder<span className="text-fo-indigo">OS</span>
         </span>
+      </div>
+
+      {/* ── New Project Button ───────────────────────────────────────────── */}
+      <div className="px-4 pt-4 pb-2">
+        <button
+          onClick={() => {
+            useProjectStore.getState().resetProject();
+            router.push("/");
+          }}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-fo-indigo to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold text-xs transition-all shadow-lg hover:shadow-indigo-500/20 cursor-pointer"
+        >
+          <Plus size={14} />
+          New Project
+        </button>
       </div>
 
       {/* ── Nav Sections ─────────────────────────────────────────────────── */}
@@ -224,21 +242,31 @@ function SidebarContent({ agents, activeSection, pathname, onNavClick }: Sidebar
         ))}
       </div>
 
-      {/* ── Bottom: Agent Status Dots ─────────────────────────────────────── */}
-      <div className="mt-auto px-5 pt-4 border-t border-border">
-        <div className="text-xs text-fo-sub mb-2.5">Agent activity</div>
-        <div className="flex gap-1.5 flex-wrap">
-          {ALL_AGENT_IDS.map((agentId) => {
-            const status = getAgentStatus(agents, agentId);
-            return (
-              <div
-                key={agentId}
-                className={cn("w-2 h-2 rounded-full", STATUS_COLORS[status])}
-                title={agentId}
-              />
-            );
-          })}
+      {/* ── Bottom: Agent Status Dots & Logout ─────────────────────────────── */}
+      <div className="mt-auto px-5 pt-4 border-t border-border flex flex-col gap-4">
+        <div>
+          <div className="text-xs text-fo-sub mb-2.5">Agent activity</div>
+          <div className="flex gap-1.5 flex-wrap">
+            {ALL_AGENT_IDS.map((agentId) => {
+              const status = getAgentStatus(agents, agentId);
+              return (
+                <div
+                  key={agentId}
+                  className={cn("w-2 h-2 rounded-full", STATUS_COLORS[status])}
+                  title={agentId}
+                />
+              );
+            })}
+          </div>
         </div>
+
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border hover:border-fo-rose text-fo-sub hover:text-fo-rose text-xs font-semibold transition-all cursor-pointer"
+        >
+          <LogOut size={13} />
+          Sign Out
+        </button>
       </div>
     </>
   );
