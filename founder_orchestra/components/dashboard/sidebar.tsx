@@ -104,13 +104,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     if (path) {
       router.push(path);
     } else {
-      if (pathname !== "/dashboard") {
+      if (pathname !== "/dashboard" && pathname !== "/dashboard/") {
         router.push("/dashboard");
         // Scroll after a tiny timeout to let the DOM render
         setTimeout(() => {
           const el = document.getElementById(sectionId);
           if (el) el.scrollIntoView({ behavior: "smooth" });
-        }, 150);
+        }, 350);
       } else {
         const el = document.getElementById(sectionId);
         if (el) el.scrollIntoView({ behavior: "smooth" });

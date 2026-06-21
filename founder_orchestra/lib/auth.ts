@@ -120,10 +120,8 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
-  // ── Pages: Custom auth pages (optional) ────────────────────────────────
   pages: {
-    signIn: "/", // Redirect to landing page for sign-in
-    // TODO: Create custom sign-in / sign-up pages
+    signIn: "/login",
   },
 
   // ── Secret: Used to encrypt tokens ─────────────────────────────────────
