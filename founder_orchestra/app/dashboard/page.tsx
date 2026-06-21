@@ -12,7 +12,7 @@
 
 "use client";
 
-
+import { useEffect } from "react";
 import { useProjectStore, getAgentStatus } from "@/lib/store/project-store";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentStatus } from "@/lib/types";
@@ -110,13 +110,43 @@ export default function DashboardPage() {
   const sprintBoardCards = getSprintCardsData(githubIssuesList);
   const marketingAssetsProps = getMarketingAssetsData(marketingOutput);
 
+  useEffect(() => {
+    const sections = document.querySelectorAll("section[id]");
+    if (sections.length === 0) return;
+
+    const visibleSections = new Map<string, boolean>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          visibleSections.set(entry.target.id, entry.isIntersecting);
+        });
+
+        // Find the first section that is visible (starting from top to bottom)
+        const order = ["orbit", "market", "competitors", "product", "marketing", "architecture", "engineering"];
+        const currentActive = order.find((id) => visibleSections.get(id));
+        
+        if (currentActive) {
+          useProjectStore.getState().setActiveSection(currentActive);
+        }
+      },
+      {
+        rootMargin: "-10% 0px -50% 0px",
+        threshold: 0,
+      }
+    );
+
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div>
       {/* ── Agent Orbit ────────────────────────────────────────────────────── */}
-      <AgentOrbit />
-
-      {/* ── Stats Row ──────────────────────────────────────────────────────── */}
-      <StatsRow />
+      <section id="orbit">
+        <AgentOrbit />
+        <StatsRow />
+      </section>
 
       <h2 className="text-xl font-display font-semibold mb-6 mt-12 border-b border-border pb-2 text-fo-text">
         Wave 1: Strategy & Market
@@ -127,7 +157,6 @@ export default function DashboardPage() {
         <SectionHeader
           title="Market Intelligence"
           color="#38BDF8"
-          action="View full report →"
           {...getHeaderStatusProps(marketStatus)}
         />
         <div className="relative min-h-[200px]">
@@ -166,7 +195,6 @@ export default function DashboardPage() {
         <SectionHeader
           title="Competitive Landscape"
           color="#F43F5E"
-          action="Full matrix →"
           {...getHeaderStatusProps(marketStatus)}
         />
         <div className="relative min-h-[250px] mb-7">
@@ -570,18 +598,34 @@ function getUserStoriesData(agentOutput: any): any[] | undefined {
   );
   if (!section) return undefined;
 
-  const lines = section.content.split("\n");
+  const normalized = section.content
+    .replace(/(\d+)\.\s+(?=As\s+a[n]?\s)/gi, '\n$1. ')
+    .replace(/\(high,|medium,|low,/gi, (m: string) => '\n' + m);
+  const lines = normalized.split("\n");
   const stories: any[] = [];
   let idCounter = 1;
   lines.forEach((line: string) => {
     const trimmed = line.trim();
     if (trimmed.toLowerCase().includes("as a") || trimmed.toLowerCase().includes("as an")) {
-      const cleanText = trimmed.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, "");
+      let cleanText = trimmed.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, "");
+      let priority = "medium";
+      let epic = "Core Platform";
+
+      const metaMatch = cleanText.match(/\((high|medium|low),\s*epic:\s*([^)]+)\)/i);
+      if (metaMatch) {
+        priority = metaMatch[1].toLowerCase();
+        epic = metaMatch[2].trim();
+        cleanText = cleanText.replace(metaMatch[0], "").trim();
+      } else {
+        priority = cleanText.toLowerCase().includes("must") || cleanText.toLowerCase().includes("critical") || idCounter <= 2 ? "high" : idCounter <= 4 ? "medium" : "low";
+        epic = cleanText.includes("workout") || cleanText.includes("exercise") ? "Workout Engine" : cleanText.includes("onboard") || cleanText.includes("sign up") ? "Onboarding" : "Core Platform";
+      }
+
       stories.push({
         id: `US-${String(idCounter).padStart(3, '0')}`,
         text: cleanText,
-        epic: cleanText.includes("workout") || cleanText.includes("exercise") ? "Workout Engine" : cleanText.includes("onboard") || cleanText.includes("sign up") ? "Onboarding" : "Core Platform",
-        priority: cleanText.toLowerCase().includes("must") || cleanText.toLowerCase().includes("critical") || idCounter <= 2 ? "high" : idCounter <= 4 ? "medium" : "low",
+        epic,
+        priority,
       });
       idCounter++;
     }
@@ -597,7 +641,10 @@ function getRoadmapData(agentOutput: any): any[] | undefined {
   );
   if (!section) return undefined;
 
-  const lines = section.content.split("\n");
+  const normalized = section.content
+    .replace(/(Phase\s*\d+(?:\s*\([^)]*\))?|Q\d+(?:\s*\([^)]*\))?|\bMVP\b|\bGrowth\b|\bScale\b)\s*[:)]?\s*/gi, '\n$1: ')
+    .replace(/\.\s+(Phase\s*\d+|Q\d+|\bMVP\b|\bGrowth\b|\bScale\b)/gi, '.\n$1');
+  const lines = normalized.split("\n");
   const phases: any[] = [];
   let currentPhase: any = null;
 
@@ -605,41 +652,57 @@ function getRoadmapData(agentOutput: any): any[] | undefined {
     const trimmed = line.trim();
     if (!trimmed) return;
 
-    const isPhaseHeader = trimmed.match(/^(?:Phase\s*\d+|Q\d+|\*\*Phase|\*\*Q\d+)/i) || trimmed.toLowerCase().includes("mvp") || trimmed.toLowerCase().includes("growth") || trimmed.toLowerCase().includes("scale");
+    const colonIndex = trimmed.indexOf(":");
+    let headerText = trimmed;
+    let inlineContent = "";
+    if (colonIndex !== -1) {
+      headerText = trimmed.substring(0, colonIndex).trim();
+      inlineContent = trimmed.substring(colonIndex + 1).trim();
+    }
+
+    const isPhaseHeader = headerText.match(/^(?:Phase\s*\d+|Q\d+|\*\*Phase|\*\*Q\d+)/i) || 
+                          headerText.toLowerCase().includes("mvp") || 
+                          headerText.toLowerCase().includes("growth") || 
+                          headerText.toLowerCase().includes("scale");
+
     if (isPhaseHeader && !trimmed.startsWith("-") && !trimmed.startsWith("*")) {
       if (currentPhase) {
-        // Fallback to extract inline features in parentheses if no items were added
-        if (currentPhase.items.length === 0) {
-          const parenMatch = currentPhase.title.match(/(.*)\(([^)]+)\)/);
-          if (parenMatch) {
-            currentPhase.title = parenMatch[1].trim();
-            currentPhase.items = parenMatch[2].split(",").map((s: string) => s.trim());
-          }
-        }
         phases.push(currentPhase);
       }
       const idx = phases.length;
       const quarter = idx === 0 ? "q1" : idx === 1 ? "q2" : "q3";
       const label = idx === 0 ? "Q1 — MVP" : idx === 1 ? "Q2 — Growth" : idx === 2 ? "Q3 — Scale" : `Q${idx + 1} — Future`;
+      
+      let title = headerText.replace(/[#*`]/g, "").replace(/^Phase\s*\d+[:\s-]*/i, "").trim();
+      title = title.replace(/^[:()\s-]+|[:()\s-]+$/g, "").trim();
+      if (!title) {
+        title = idx === 0 ? "MVP" : idx === 1 ? "Growth" : "Scale";
+      }
+
       currentPhase = {
         label,
-        title: trimmed.replace(/[#*`]/g, "").replace(/^Phase\s*\d+[:\s-]*/i, "").trim(),
+        title,
         quarter,
         items: [],
       };
+
+      if (inlineContent) {
+        const rawItems = inlineContent.split(/[,;]|\.\s+/);
+        rawItems.forEach((item) => {
+          const cleaned = item.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, "").trim();
+          const finalItem = cleaned.replace(/\.$/, "").trim();
+          const lower = finalItem.toLowerCase();
+          if (finalItem && finalItem.length > 2 && !lower.includes("phase") && lower !== "mvp" && lower !== "growth" && lower !== "scale") {
+            currentPhase.items.push(finalItem);
+          }
+        });
+      }
     } else if (currentPhase && (trimmed.startsWith("-") || trimmed.startsWith("*") || trimmed.match(/^\d+[.)]/))) {
       currentPhase.items.push(trimmed.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, ""));
     }
   });
 
   if (currentPhase) {
-    if (currentPhase.items.length === 0) {
-      const parenMatch = currentPhase.title.match(/(.*)\(([^)]+)\)/);
-      if (parenMatch) {
-        currentPhase.title = parenMatch[1].trim();
-        currentPhase.items = parenMatch[2].split(",").map((s: string) => s.trim());
-      }
-    }
     phases.push(currentPhase);
   }
 

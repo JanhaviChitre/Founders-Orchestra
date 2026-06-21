@@ -46,6 +46,11 @@ export const metadata: Metadata = {
   description:
     "Enter your startup idea and let 6 specialized AI agents validate, research, plan, architect, and market it for you.",
   keywords: ["startup", "AI", "orchestration", "market research", "product management"],
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  },
   other: {
     "darkreader-lock": "true",
   },

@@ -82,9 +82,7 @@ export default function LandingPage() {
       <div className="w-full max-w-2xl">
         {/* ── Logo ───────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-fo-indigo to-purple-500 flex items-center justify-center">
-            <Zap size={20} className="text-white" />
-          </div>
+          <img src="/favicon.png" alt="FounderOS Logo" className="w-10 h-10 object-contain" />
           <h1 className="font-display text-3xl font-bold tracking-tight">
             Founder<span className="text-fo-indigo">OS</span>
           </h1>

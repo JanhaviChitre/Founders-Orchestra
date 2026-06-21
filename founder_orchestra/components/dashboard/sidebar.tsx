@@ -61,22 +61,19 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { icon: BarChart3, label: "Market Analysis", sectionId: "market" },
       { icon: Flag, label: "Competitors", sectionId: "competitors" },
-      { icon: TrendingUp, label: "Trends", sectionId: "market" },
     ],
   },
   {
     label: "Product",
     items: [
-      { icon: FileText, label: "PRD", sectionId: "product" },
-      { icon: Map, label: "Roadmap", sectionId: "product" },
+      { icon: FileText, label: "PRD & Roadmap", sectionId: "product" },
       { icon: Building2, label: "Architecture", sectionId: "architecture" },
     ],
   },
   {
     label: "Execution",
     items: [
-      { icon: GitBranch, label: "GitHub Issues", sectionId: "engineering" },
-      { icon: Rocket, label: "Sprint Plan", sectionId: "engineering" },
+      { icon: GitBranch, label: "Engineering", sectionId: "engineering" },
       { icon: Megaphone, label: "Marketing", sectionId: "marketing" },
     ],
   },
@@ -189,9 +186,7 @@ function SidebarContent({ agents, activeSection, pathname, onNavClick }: Sidebar
     <>
       {/* ── Logo ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2.5 px-5 pb-7 border-b border-border">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-fo-indigo to-purple-500 flex items-center justify-center">
-          <Zap size={16} className="text-white" />
-        </div>
+        <img src="/favicon.png" alt="FounderOS Logo" className="w-8 h-8 object-contain" />
         <span className="font-display text-lg font-bold tracking-tight">
           Founder<span className="text-fo-indigo">OS</span>
         </span>

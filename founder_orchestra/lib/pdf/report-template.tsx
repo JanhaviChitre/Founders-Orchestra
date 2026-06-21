@@ -24,7 +24,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { ProjectState, OutputSection } from "@/lib/types";
-import { AGENT_CONFIGS } from "@/lib/agents/config";
+import { AGENT_CONFIGS, ALL_AGENT_IDS } from "@/lib/agents/config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COLORS
@@ -280,12 +280,33 @@ const styles = StyleSheet.create({
  * so they display as formatted lists rather than run-on paragraphs.
  */
 function RenderContent({ content }: { content: string }) {
-  const lines = content.split("\n").filter((l) => l.trim() !== "");
+  const sanitized = sanitizeTruncatedContent(content);
+
+  // Normalize inline numbered lists for user stories
+  const normalized = sanitized
+    .replace(/(\d+)\.\s+(?=As\s+a[n]?\s)/gi, '\n$1. ');
+
+  // Normalize inline phase descriptions for roadmap
+  const normalized2 = normalized
+    .replace(/(Phase\s*\d+(?:\s*\([^)]*\))?|Q\d+(?:\s*\([^)]*\))?|\bMVP\b|\bGrowth\b|\bScale\b)\s*[:)]?\s*/gi, '\n$1: ')
+    .replace(/\.\s+(Phase\s*\d+|Q\d+|\bMVP\b|\bGrowth\b|\bScale\b)/gi, '.\n$1');
+
+  const lines = normalized2.split("\n").filter((l) => l.trim() !== "");
 
   return (
     <View>
       {lines.map((line, i) => {
         const trimmed = line.trim();
+
+        // Detect and strip headings: "### Title" or "## Title"
+        const headingMatch = trimmed.match(/^(#{1,6})\s*(.+)/);
+        if (headingMatch) {
+          return (
+            <Text key={i} style={[styles.subsectionTitle, { marginTop: 10 }]}>
+              {headingMatch[2]}
+            </Text>
+          );
+        }
 
         // Detect bullet points: "- text", "• text", "* text"
         const bulletMatch = trimmed.match(/^[-•*]\s+(.+)/);
@@ -363,6 +384,269 @@ function RenderTable({ section }: { section: OutputSection }) {
           ))}
         </View>
       ))}
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SANITIZE TRUNCATED CONTENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function sanitizeTruncatedContent(text: string): string {
+  if (!text) return "";
+  
+  let cleaned = text
+    .replace(/\*\*(growth|scale|momentum|note|source)\s*:\*\*/gi, '')
+    .replace(/\n?(growth|scale):\s*/gi, ' ');
+  
+  // Fix for Bug 3: remove any unclosed parenthesis at the end of a string
+  cleaned = cleaned.replace(/\([^)]*$/, '').trim();
+  
+  cleaned = cleaned.replace(/[,;\-\s]+$/, "");
+
+  if (cleaned.length > 0 && !/[.!?]$/.test(cleaned)) {
+    cleaned = cleaned + ".";
+  }
+
+  return cleaned;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARSING HELPERS — GitHub Issues & Sprint Plan
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getGithubIssuesData(agentOutput: any): any[] | undefined {
+  if (!agentOutput || !agentOutput.sections) return undefined;
+  const section = agentOutput.sections.find((s: any) =>
+    s.heading.toLowerCase().includes("issue")
+  );
+  if (!section) return undefined;
+
+  const issues: any[] = [];
+  let issueCounter = 1;
+
+  // 1. Try to parse from section.data (structured format)
+  if (section.data && Array.isArray(section.data) && section.data.length > 0) {
+    section.data.forEach((item: any) => {
+      if (item && item.name) {
+        const title = item.name;
+        const points = typeof item.value === "number" ? item.value : 5;
+
+        const labels: any[] = [];
+        if (title.toLowerCase().includes("auth") || title.toLowerCase().includes("jwt")) {
+          labels.push({ text: "auth", variant: "auth" });
+        }
+        if (title.toLowerCase().includes("ai") || title.toLowerCase().includes("model")) {
+          labels.push({ text: "ai", variant: "ai" });
+        }
+        if (title.toLowerCase().includes("ui") || title.toLowerCase().includes("page")) {
+          labels.push({ text: "ui", variant: "ui" });
+        }
+        if (labels.length === 0) {
+          labels.push({ text: "feature", variant: "feat" });
+        }
+        labels.push({
+          text: `P${issueCounter <= 2 ? 1 : issueCounter <= 4 ? 2 : 3}`,
+          variant: `p${issueCounter <= 2 ? 1 : issueCounter <= 4 ? 2 : 3}`,
+        });
+
+        issues.push({
+          number: `#${String(issueCounter).padStart(3, '0')}`,
+          title,
+          labels,
+          storyPoints: points,
+        });
+        issueCounter++;
+      }
+    });
+    if (issues.length > 0) return issues;
+  }
+
+  // 2. Fall back to parsing section.content lines (markdown format)
+  const lines = section.content.split("\n");
+  lines.forEach((line: string) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("-") || trimmed.startsWith("*") || trimmed.match(/^\d+[.)]/)) {
+      const cleanText = trimmed.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, "");
+      const spMatch = cleanText.match(/(?:\(|\[)\s*(\d+)\s*(?:sp|story|points?)\s*(?:\)|\])/i);
+      const points = spMatch ? parseInt(spMatch[1]) : 5;
+      const title = cleanText.replace(/(?:\(|\[)\s*\d+\s*(?:sp|story|points?)\s*(?:\)|\])/i, "").trim();
+
+      const labels: any[] = [];
+      if (title.toLowerCase().includes("auth") || title.toLowerCase().includes("jwt")) {
+        labels.push({ text: "auth", variant: "auth" });
+      }
+      if (title.toLowerCase().includes("ai") || title.toLowerCase().includes("model")) {
+        labels.push({ text: "ai", variant: "ai" });
+      }
+      if (title.toLowerCase().includes("ui") || title.toLowerCase().includes("page")) {
+        labels.push({ text: "ui", variant: "ui" });
+      }
+      if (labels.length === 0) {
+        labels.push({ text: "feature", variant: "feat" });
+      }
+      labels.push({
+        text: `P${issueCounter <= 2 ? 1 : issueCounter <= 4 ? 2 : 3}`,
+        variant: `p${issueCounter <= 2 ? 1 : issueCounter <= 4 ? 2 : 3}`,
+      });
+
+      issues.push({
+        number: `#${String(issueCounter).padStart(3, '0')}`,
+        title,
+        labels,
+        storyPoints: points,
+      });
+      issueCounter++;
+    }
+  });
+
+  return issues.length > 0 ? issues : undefined;
+}
+
+function getSprintCardsData(agentOutput: any, issues: any[] | undefined): any[] | undefined {
+  if (!agentOutput || !agentOutput.sections) return undefined;
+
+  // Check if there are separate sections for Sprint Plan columns containing data lists
+  const sprintSections = agentOutput.sections.filter((s: any) => {
+    const heading = s.heading.toLowerCase();
+    const content = s.content.toLowerCase();
+    return heading.includes("sprint") || heading.includes("todo") || heading.includes("todo") || content.includes("to do") || content.includes("in progress") || content.includes("done");
+  });
+
+  const cards: any[] = [];
+  let hasDataSprint = false;
+
+  sprintSections.forEach((sec: any) => {
+    // If the section has data list, and the content/heading indicates a column
+    const txt = (sec.content + " " + sec.heading).toLowerCase();
+    let col: "todo" | "inprog" | "done" | null = null;
+    if (txt.includes("to do") || txt.includes("todo")) col = "todo";
+    else if (txt.includes("in progress") || txt.includes("inprog")) col = "inprog";
+    else if (txt.includes("done")) col = "done";
+
+    if (col && sec.data && Array.isArray(sec.data) && sec.data.length > 0) {
+      hasDataSprint = true;
+      sec.data.forEach((item: any) => {
+        if (item && item.name) {
+          const matchedIssue = issues?.find(
+            (issue) => issue.title.toLowerCase().trim() === item.name.toLowerCase().trim()
+          );
+          cards.push({
+            title: item.name,
+            points: typeof item.value === "number" ? item.value : 5,
+            linkedId: matchedIssue?.number || "",
+            column: col,
+          });
+        }
+      });
+    }
+  });
+
+  if (hasDataSprint && cards.length > 0) {
+    return cards;
+  }
+
+  // Fallback: distribute issues dynamically
+  if (!issues || issues.length === 0) return undefined;
+  return issues.map((issue, idx) => ({
+    title: issue.title,
+    points: issue.storyPoints,
+    linkedId: issue.number,
+    column: idx < 2 ? "done" : idx < 4 ? "inprog" : "todo",
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENT — Engineering Manager Section PDF Renderer
+// ─────────────────────────────────────────────────────────────────────────────
+
+function RenderEngineeringSection({ output, sections }: { output: any, sections: any[] }) {
+  const issues = getGithubIssuesData(output);
+  const sprintCards = getSprintCardsData(output, issues);
+
+  if (!issues || issues.length === 0) {
+    return (
+      <View>
+        {sections.map((section: any, idx: number) => {
+          const cleanHeading = section.heading.replace(/^(#{1,6})\s*/, "");
+          return (
+            <View key={idx} wrap={true}>
+              <Text style={styles.subsectionTitle}>
+                {cleanHeading}
+              </Text>
+              <RenderContent content={section.content} />
+              <RenderTable section={section} />
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {/* ── Issues Subsection ────────────────────────────────────────── */}
+      <View style={{ marginTop: 10 }}>
+        <Text style={styles.subsectionTitle}>GitHub Issues</Text>
+        {issues.map((issue, i) => (
+          <View key={i} style={[styles.bulletRow, { marginBottom: 6 }]}>
+            <Text style={{ fontSize: 10.5, fontFamily: "Helvetica-Bold", color: COLORS.primary, width: 35, flexGrow: 0 }}>
+              {issue.number}
+            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10.5, lineHeight: 1.5, color: COLORS.dark }}>
+                {issue.title} <Text style={{ color: COLORS.muted }}>({issue.storyPoints} SP)</Text>
+              </Text>
+              <View style={{ flexDirection: "row", gap: 4, marginTop: 2 }}>
+                {issue.labels.map((lbl: any, li: number) => (
+                  <View key={li} style={{
+                    backgroundColor: COLORS.primaryLight,
+                    borderRadius: 3,
+                    paddingVertical: 1,
+                    paddingHorizontal: 4,
+                  }}>
+                    <Text style={{
+                      fontSize: 8,
+                      fontFamily: "Helvetica-Bold",
+                      color: COLORS.primary,
+                    }}>
+                      {lbl.text}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* ── Sprint Plan Subsection ───────────────────────────────────── */}
+      {sprintCards && sprintCards.length > 0 && (
+        <View style={{ marginTop: 15 }}>
+          <Text style={styles.subsectionTitle}>Sprint Plan</Text>
+          {["todo", "inprog", "done"].map((col) => {
+            const colTitle = col === "todo" ? "To Do" : col === "inprog" ? "In Progress" : "Done";
+            const colColor = col === "todo" ? COLORS.light : col === "inprog" ? COLORS.amber : COLORS.emerald;
+            const items = sprintCards.filter((c) => c.column === col);
+            if (items.length === 0) return null;
+            return (
+              <View key={col} style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: colColor, marginBottom: 4 }}>
+                  {colTitle}
+                </Text>
+                {items.map((item, ii) => (
+                  <View key={ii} style={[styles.bulletRow, { paddingLeft: 12, marginBottom: 3 }]}>
+                    <Text style={{ color: colColor, marginRight: 6 }}>•</Text>
+                    <Text style={styles.bulletText}>
+                      {item.title} <Text style={{ color: COLORS.muted, fontSize: 9 }}>({item.points} SP - {item.linkedId})</Text>
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -478,10 +762,48 @@ export function ReportDocument({ project }: ReportDocumentProps) {
       </Page>
 
       {/* ── Agent Output Pages ──────────────────────────────────────────── */}
-      {Object.entries(agents).map(([agentId, output]) => {
+      {ALL_AGENT_IDS.map((agentId) => {
+        const output = agents[agentId];
         // Only include completed agents that have content
         if (!output || output.status !== "completed") return null;
-        const config = AGENT_CONFIGS[agentId as keyof typeof AGENT_CONFIGS];
+
+        // Bug 2: Deduplicate sections by heading
+        const seen = new Set<string>();
+        const uniqueSections = (output.sections || []).filter((s: any) => {
+          const key = s.heading.toLowerCase().trim();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        // Bug 3: Marketing Agent filter
+        let sectionsToRender = uniqueSections;
+        if (agentId === "marketing") {
+          const hasLandingOrSocial = uniqueSections.some((s) => {
+            const h = s.heading.toLowerCase();
+            return h.includes("landing") || h.includes("linkedin") || h.includes("social");
+          });
+
+          if (hasLandingOrSocial) {
+            sectionsToRender = uniqueSections.filter((s) => {
+              const h = s.heading.toLowerCase();
+              return h.includes("landing") || h.includes("linkedin") || h.includes("social");
+            });
+          } else {
+            const hasHeroCopyCampaign = uniqueSections.some((s) => {
+              const h = s.heading.toLowerCase();
+              return h.includes("hero") || h.includes("copy") || h.includes("campaign");
+            });
+            if (hasHeroCopyCampaign) {
+              sectionsToRender = uniqueSections.filter((s) => {
+                const h = s.heading.toLowerCase();
+                return h.includes("hero") || h.includes("copy") || h.includes("campaign");
+              });
+            }
+          }
+        }
+
+        const config = AGENT_CONFIGS[agentId];
         if (!config) return null;
 
         const accentColor = getAgentColor(config.color);
@@ -510,7 +832,9 @@ export function ReportDocument({ project }: ReportDocumentProps) {
                   { borderLeftColor: accentColor },
                 ]}
               >
-                <Text style={styles.summaryText}>{output.summary}</Text>
+                <Text style={styles.summaryText}>
+                  {sanitizeTruncatedContent(output.summary)}
+                </Text>
               </View>
             )}
 
@@ -528,20 +852,27 @@ export function ReportDocument({ project }: ReportDocumentProps) {
                 </View>
               )}
 
-            {/* Sections */}
-            {output.sections.map((section, idx) => (
-              <View key={idx} wrap={true}>
-                <Text style={styles.subsectionTitle}>
-                  {section.heading}
-                </Text>
+            {/* Render content sections: check if it's the engineering manager agent */}
+            {agentId === "engineering-manager" ? (
+              <RenderEngineeringSection output={output} sections={sectionsToRender} />
+            ) : (
+              sectionsToRender.map((section, idx) => {
+                const cleanHeading = section.heading.replace(/^(#{1,6})\s*/, "");
+                return (
+                  <View key={idx} wrap={true}>
+                    <Text style={styles.subsectionTitle}>
+                      {cleanHeading}
+                    </Text>
 
-                {/* Render text content with bullet/numbered list support */}
-                <RenderContent content={section.content} />
+                    {/* Render text content with bullet/numbered list support */}
+                    <RenderContent content={section.content} />
 
-                {/* Render table if present */}
-                <RenderTable section={section} />
-              </View>
-            ))}
+                    {/* Render table if present */}
+                    <RenderTable section={section} />
+                  </View>
+                );
+              })
+            )}
 
             {/* Footer */}
             <PageFooter startupName={input.startupName} />
