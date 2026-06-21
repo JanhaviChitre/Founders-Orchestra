@@ -488,11 +488,14 @@ Add `GROQ_API_KEY_3`, `GROQ_API_KEY_4` etc. to `.env.local` to expand the rotati
 
 ## Contributing
 
-This project was built as a submission for [Hackathon/Course Name]. The codebase is structured for a 3-person team:
+This project was built as a team submission. Meet the team:
 
-- **Team Member A** — Frontend, dashboard components, PDF template
-- **Team Member B** — AI agents, orchestrator, base agent runner
-- **Team Member C** — API routes, MongoDB integration, rate limiting
+| Name | Role | Responsibilities |
+|---|---|---|
+| **Janhavi Chitre** | AI Agents Lead | Agent configs, system prompts, LangChain integration, structured output |
+| **Ishika Arote** | Backend Lead | API routes, MongoDB integration, rate limiting, SSE streaming |
+| **Shrutika Vartak** | Frontend Lead | Dashboard components, PDF template, animations, skeletons |
+| **Soham Pansare** | Foundation & Deployment | Project architecture, orchestrator, base agent runner, DevOps |
 
 ---
 
