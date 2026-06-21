@@ -138,20 +138,20 @@ graph TD
     FI[Founder Input] --> ORC[Orchestrator]
 
     ORC --> W1[Wave 1 — Research]
-    W1 --> SA[Startup Advisor\nllama-3.3-70b\nWeb Search ✓]
-    W1 --> MR[Market Research\nllama-3.3-70b\nWeb Search ✓]
+    W1 --> SA["Startup Advisor<br/>llama-3.3-70b<br/>Web Search ✓"]
+    W1 --> MR["Market Research<br/>llama-3.3-70b<br/>Web Search ✓"]
 
     SA --> W2[Wave 2 — Product]
     MR --> W2
 
-    W2 --> PM[Product Manager\nllama-3.3-70b\nNo Tools]
-    W2 --> MA[Marketing Agent\nllama-3.1-8b\nWeb Search ✓]
+    W2 --> PM["Product Manager<br/>llama-3.3-70b<br/>No Tools"]
+    W2 --> MA["Marketing Agent<br/>llama-3.1-8b<br/>Web Search ✓"]
 
     PM --> W3[Wave 3 — Engineering]
     MA --> W3
 
-    W3 --> AR[Software Architect\nllama-3.3-70b\nNo Tools]
-    W3 --> EM[Engineering Manager\nllama-3.1-8b\nNo Tools]
+    W3 --> AR["Software Architect<br/>llama-3.3-70b<br/>No Tools"]
+    W3 --> EM["Engineering Manager<br/>llama-3.1-8b<br/>No Tools"]
 
     AR --> OUT[Structured Output]
     EM --> OUT
@@ -259,20 +259,20 @@ flowchart LR
     end
 
     subgraph Server
-        API[/api/orchestrate]
+        API[POST api/orchestrate]
         ORC[Orchestrator]
-        BA[base-agent.ts]
+        BA[Base Agent Runner]
     end
 
     subgraph External
-        GROQ[Groq API\nKey 1 / Key 2 / ...]
+        GROQ[Groq API - Multi Key]
         TAV[Tavily Search]
         MDB[(MongoDB Atlas)]
     end
 
     UI -->|POST startup input| API
     API -->|Stream SSE events| SSE
-    SSE -->|agent-start/complete/error| ZS
+    SSE -->|agent-start / complete / error| ZS
     ZS -->|re-render| UI
     API --> ORC
     ORC --> BA
@@ -472,12 +472,12 @@ The 70B model is used for tasks requiring deep reasoning (idea validation, marke
 
 ```mermaid
 flowchart TD
-    REQ[Agent API Call] --> KEY[Get Next Key\nRound Robin]
+    REQ[Agent API Call] --> KEY[Get Next Key - Round Robin]
     KEY --> CALL[Invoke Groq]
     CALL --> OK{Success?}
     OK -->|Yes| RET[Return Structured Output]
     OK -->|429 or 400| ROT[Rotate to Next Key]
-    ROT --> RETRY{Keys\nRemaining?}
+    ROT --> RETRY{Keys Remaining?}
     RETRY -->|Yes| CALL
     RETRY -->|No| ERR[Return Error Output]
 ```
@@ -488,11 +488,14 @@ Add `GROQ_API_KEY_3`, `GROQ_API_KEY_4` etc. to `.env.local` to expand the rotati
 
 ## Contributing
 
-This project was built as a submission for [Hackathon/Course Name]. The codebase is structured for a 3-person team:
+This project was built as a team submission. Meet the team:
 
-- **Team Member A** — Frontend, dashboard components, PDF template
-- **Team Member B** — AI agents, orchestrator, base agent runner
-- **Team Member C** — API routes, MongoDB integration, rate limiting
+| Name | Role | Responsibilities |
+|---|---|---|
+| **Janhavi Chitre** | AI Agents Lead | Agent configs, system prompts, LangChain integration, structured output |
+| **Ishika Arote** | Backend Lead | API routes, MongoDB integration, rate limiting, SSE streaming |
+| **Shrutika Vartak** | Frontend Lead | Dashboard components, PDF template, animations, skeletons |
+| **Soham Pansare** | Foundation & Deployment | Project architecture, orchestrator, base agent runner, DevOps |
 
 ---
 
