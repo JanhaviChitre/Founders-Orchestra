@@ -56,6 +56,9 @@ export async function orchestrate(
   targetAgents?: AgentId[]
 ): Promise<Record<AgentId, AgentOutput>> {
   const results: Partial<Record<AgentId, AgentOutput>> = {};
+  console.log(`\n=============================================================================`);
+  console.log(`[Orchestrator] 🚀 Starting Multi-Agent Pipeline for "${input.startupName}"`);
+  console.log(`=============================================================================\n`);
 
   for (const wave of targetWaves) {
     let waveAgents = getAgentsByWave(wave);
@@ -63,15 +66,18 @@ export async function orchestrate(
       waveAgents = waveAgents.filter((a) => targetAgents.includes(a.id));
     }
     if (waveAgents.length === 0) continue;
-    const contextFromPreviousWaves = buildContext(results, input.previousResults); // We will need to pass previousResults if resuming
+
+    console.log(`[Orchestrator] 🌊 Starting Wave ${wave} execution (${waveAgents.map(a => a.name).join(", ")})`);
+    const contextFromPreviousWaves = buildContext(results, input.previousResults);
+    if (contextFromPreviousWaves) {
+      console.log(`[Orchestrator] 📦 Accumulated context from previous waves (${contextFromPreviousWaves.length} chars)`);
+    }
 
     for (const agentConfig of waveAgents) {
-
-      // ── Notify: agent starting ──────────────────────────────────────
+      console.log(`[Orchestrator] ▶️ Triggering Agent: ${agentConfig.name} (${agentConfig.id})`);
       onProgress?.({ type: "agent-start", agentId: agentConfig.id });
 
       try {
-        // ── Choose the right runner based on tools ─────────────────────
         const hasTools = agentConfig.tools && agentConfig.tools.length > 0;
         const output = hasTools
           ? await runAgentWithTools(
@@ -99,7 +105,6 @@ export async function orchestrate(
 
         results[agentConfig.id] = output;
 
-        // ── Notify: agent completed ───────────────────────────────────
         onProgress?.({
           type: output.status === "completed" ? "agent-complete" : "agent-error",
           agentId: agentConfig.id,
@@ -107,15 +112,11 @@ export async function orchestrate(
           error: output.error,
         });
       } catch (error) {
-        const errorOutput: AgentOutput = {
+        const errorOutput = {
           agentId: agentConfig.id,
           status: "error",
-          title: `${agentConfig.name} — Failed`,
-          summary: "Agent encountered an unexpected error",
-          sections: [],
-          metadata: {},
           error: error instanceof Error ? error.message : "Unknown error",
-        };
+        } as AgentOutput;
 
         results[agentConfig.id] = errorOutput;
 
@@ -126,8 +127,10 @@ export async function orchestrate(
         });
       }
     }
+    console.log(`[Orchestrator] ✅ Wave ${wave} finished execution\n`);
   }
 
+  console.log(`[Orchestrator] 🏁 Pipeline execution complete! (${Object.keys(results).length} agents processed)\n`);
   return results as Record<AgentId, AgentOutput>;
 }
 
@@ -139,7 +142,6 @@ function buildContext(
   results: Partial<Record<AgentId, AgentOutput>>,
   previousResults?: Record<string, any>
 ): string {
-  // Merge current wave results with previous results for full context
   const merged = { ...(previousResults || {}), ...results };
   const entries = Object.entries(merged);
   if (entries.length === 0) return "";
@@ -148,11 +150,8 @@ function buildContext(
     .filter(([, output]) => output?.status === "completed")
     .map(([agentId, output]) => {
       const config = AGENT_CONFIGS[agentId as AgentId];
-      // Fallback name if agentId isn't in config (e.g. legacy/mock data)
       const name = config?.name || agentId;
-      return `### ${name}\n${output.summary}\n${
-        output.sections?.map((s: any) => `#### ${s.heading}\n${s.content}`).join("\n\n") || ""
-      }`;
+      return `### ${name}\n${JSON.stringify(output, null, 2)}`;
     })
     .join("\n\n---\n\n");
 }

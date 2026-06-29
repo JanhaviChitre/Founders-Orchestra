@@ -22,7 +22,7 @@
  */
 
 import mongoose, { Schema, type Document } from "mongoose";
-import type { StartupInput, AgentOutput, OrchestrationStatus } from "@/lib/types";
+import type { StartupInput, AgentOutputUnion, OrchestrationStatus } from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPESCRIPT INTERFACE
@@ -33,7 +33,7 @@ import type { StartupInput, AgentOutput, OrchestrationStatus } from "@/lib/types
 export interface IProject extends Document {
   userId: string;
   input: StartupInput;
-  agents: Record<string, AgentOutput>;
+  agents: Record<string, AgentOutputUnion>;
   overallStatus: OrchestrationStatus;
   createdAt: Date;
   updatedAt: Date;

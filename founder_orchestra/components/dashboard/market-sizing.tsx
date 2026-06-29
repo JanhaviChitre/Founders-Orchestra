@@ -14,6 +14,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { BarChart3 } from "lucide-react";
 import { renderMarkdown } from "@/lib/utils";
+import { ExpandableText } from "@/components/ui/expandable-text";
 import {
   BarChart,
   Bar,
@@ -23,23 +24,26 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import type { MarketSizingEntry } from "@/lib/types";
 
-interface MarketSizingProps {
-  entries?: MarketSizingEntry[];
-  insight?: string;
+export interface MarketSizingData {
+  tam: { value: string; numeric: number };
+  sam: { value: string; numeric: number };
+  som: { value: string; numeric: number };
+  insight: string;
 }
 
-const DEFAULT_ENTRIES: MarketSizingEntry[] = [
-  { label: "TAM — Total Addressable Market", value: "$42B", barPercent: 100, barColor: "#6366F1" },
-  { label: "SAM — Serviceable Addressable", value: "$9.8B", barPercent: 24, barColor: "#38BDF8" },
-  { label: "SOM — Serviceable Obtainable", value: "$490M", barPercent: 6, barColor: "#10B981" },
-];
+interface MarketSizingProps {
+  market_sizing?: MarketSizingData;
+}
 
-const DEFAULT_INSIGHT =
-  'Busy professionals (25–45, $80K+) represent an underserved segment. Niche positioning in "micro-workout" category shows 3× lower CAC than broad fitness apps.';
+const DEFAULT_DATA: MarketSizingData = {
+  tam: { value: "$42B", numeric: 42000000000 },
+  sam: { value: "$9.8B", numeric: 9800000000 },
+  som: { value: "$490M", numeric: 490000000 },
+  insight:
+    'Busy professionals (25–45, $80K+) represent an underserved segment. Niche positioning in "micro-workout" category shows 3× lower CAC than broad fitness apps.',
+};
 
-// Custom tooltip component matching the dark theme
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
@@ -55,29 +59,46 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-export function MarketSizing({ entries = DEFAULT_ENTRIES, insight = DEFAULT_INSIGHT }: MarketSizingProps) {
-  // Map entries into the format expected by Recharts
-  const chartData = entries.map((entry) => {
-    const shortName = entry.label.split(" — ")[0]; // e.g. "TAM"
-    return {
-      name: shortName,
-      fullName: entry.label,
-      barPercent: entry.barPercent,
-      valueStr: entry.value,
-      color: entry.barColor,
-    };
-  });
+export function MarketSizing({ market_sizing = DEFAULT_DATA }: MarketSizingProps) {
+  const data = market_sizing || DEFAULT_DATA;
+  const maxNum = Math.max(data.tam.numeric || 1, 1);
+
+  const chartData = [
+    {
+      name: "TAM",
+      fullName: "TAM — Total Addressable Market",
+      barPercent: 100,
+      valueStr: data.tam.value,
+      color: "#6366F1",
+    },
+    {
+      name: "SAM",
+      fullName: "SAM — Serviceable Addressable Market",
+      barPercent: Math.max(5, Math.round(((data.sam.numeric || 0) / maxNum) * 100)),
+      valueStr: data.sam.value,
+      color: "#38BDF8",
+    },
+    {
+      name: "SOM",
+      fullName: "SOM — Serviceable Obtainable Market",
+      barPercent: Math.max(3, Math.round(((data.som.numeric || 0) / maxNum) * 100)),
+      valueStr: data.som.value,
+      color: "#10B981",
+    },
+  ];
 
   return (
     <Card>
       <CardContent className="pt-5 pb-5 flex flex-col justify-between h-full">
         <div>
-          <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-4 flex items-center gap-2">
+          <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-1 flex items-center gap-2">
             <BarChart3 size={14} />
-            Market Sizing
+            Market Sizing Breakdown
           </div>
+          <p className="text-xs text-fo-muted mb-4">
+            Quantitative valuation analysis for TAM, SAM, and SOM target markets.
+          </p>
 
-          {/* Recharts Horizontal Bar Chart */}
           <div className="h-[130px] w-full -ml-3">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -107,13 +128,17 @@ export function MarketSizing({ entries = DEFAULT_ENTRIES, insight = DEFAULT_INSI
           </div>
         </div>
 
-        {/* AI Insight box */}
-        {insight && (
-          <div className="mt-3 p-2.5 rounded-lg bg-[rgba(16,185,129,0.07)] border border-[rgba(16,185,129,0.15)]">
-            <div className="text-[11px] font-bold text-fo-emerald mb-1">AI INSIGHT</div>
-            <div className="text-[12.5px] text-fo-sub leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(insight) }} />
+        <div className="border-t border-border/50 pt-3 mt-2 flex flex-col justify-end">
+          <div className="text-[11px] font-medium text-fo-sub uppercase tracking-[0.5px] mb-1">
+            Key Insight
           </div>
-        )}
+          <ExpandableText
+            text={data.insight}
+            maxChars={100}
+            textClassName="text-xs text-fo-text leading-relaxed"
+            markdown
+          />
+        </div>
       </CardContent>
     </Card>
   );

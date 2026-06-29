@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { useProjectStore, getAgentStatus } from "@/lib/store/project-store";
 import { AGENT_CONFIGS, ALL_AGENT_IDS } from "@/lib/agents/config";
 import { cn } from "@/lib/utils";
+import { ExpandableText } from "@/components/ui/expandable-text";
 import { motion } from "framer-motion";
 import {
   Lightbulb,
@@ -198,8 +199,12 @@ function AgentRow({ agentId }: { agentId: AgentId }) {
             <div className="text-[13.5px] font-semibold font-display">
               {config.name}
             </div>
-            <div className="text-xs text-fo-sub mt-0.5 truncate">
-              {output?.summary || config.description}
+            <div className="mt-0.5">
+              <ExpandableText
+                text={(output as any)?.summary || (output as any)?.validation_summary || config.description}
+                maxChars={75}
+                textClassName="text-xs text-fo-sub"
+              />
             </div>
             {/* Progress bar */}
             <div className="mt-1.5 h-[3px] w-20 bg-[rgba(255,255,255,.06)] rounded-sm overflow-hidden">

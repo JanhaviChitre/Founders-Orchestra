@@ -6,16 +6,6 @@
  * Global state management for the entire app using Zustand.
  * Persists to localStorage so data survives page refreshes.
  *
- * HOW ZUSTAND WORKS:
- * 1. Define your state shape + actions in the `create()` call
- * 2. Use `useProjectStore(selector)` in any component to read state
- * 3. Call actions to update state — React auto-re-renders
- *
- * USAGE EXAMPLES:
- *   const input = useProjectStore((s) => s.input);
- *   const setInput = useProjectStore((s) => s.setInput);
- *   setInput({ startupName: "FitCoach AI", idea: "..." });
- *
  * Owner: Shared (all team members use this store)
  * =============================================================================
  */
@@ -23,7 +13,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type {
   AgentId,
-  AgentOutput,
+  AgentOutputUnion,
   AgentStatus,
   StartupInput,
   OrchestrationStatus,
@@ -36,15 +26,15 @@ import { MOCK_PROJECT } from "@/lib/mock-data";
 interface ProjectStore {
   input: StartupInput | null;
   projectId: string | null;
-  agents: Partial<Record<AgentId, AgentOutput>>;
+  agents: Partial<Record<AgentId, AgentOutputUnion>>;
   overallStatus: OrchestrationStatus;
-  activeSection: string;            // Current sidebar nav selection
+  activeSection: string;
   pdfModalOpen: boolean;
 
   // ── Actions ──────────────────────────────────────────────────────────────
   setInput: (input: StartupInput) => void;
   setProjectId: (projectId: string | null) => void;
-  setAgentOutput: (agentId: AgentId, output: AgentOutput) => void;
+  setAgentOutput: (agentId: AgentId, output: AgentOutputUnion) => void;
   setAgentPartialText: (agentId: AgentId, partialText: string) => void;
   setAgentStatus: (agentId: AgentId, status: AgentStatus) => void;
   setOverallStatus: (status: OrchestrationStatus) => void;
@@ -65,7 +55,7 @@ interface ProjectStore {
 const DEFAULT_STATE = {
   input: null,
   projectId: null as string | null,
-  agents: {} as Partial<Record<AgentId, AgentOutput>>,
+  agents: {} as Partial<Record<AgentId, AgentOutputUnion>>,
   overallStatus: "not-started" as OrchestrationStatus,
   activeSection: "orbit",
   pdfModalOpen: false,
@@ -97,14 +87,10 @@ export const useProjectStore = create<ProjectStore>()(
       setAgentPartialText: (agentId, partialText) =>
         set((state) => {
           const existing = state.agents[agentId];
-          const base = existing ?? {
+          const base = existing ?? ({
             agentId,
-            status: "running" as AgentStatus,
-            title: "",
-            summary: "",
-            sections: [],
-            metadata: {},
-          };
+            status: "running",
+          } as any);
           return {
             agents: {
               ...state.agents,
@@ -140,7 +126,7 @@ export const useProjectStore = create<ProjectStore>()(
         set({
           input: project.input,
           projectId: project._id ?? null,
-          agents: project.agents,
+          agents: project.agents as any,
           overallStatus: project.overallStatus,
           activeSection: "orbit",
         }),
@@ -151,7 +137,7 @@ export const useProjectStore = create<ProjectStore>()(
         set({
           input: MOCK_PROJECT.input,
           projectId: "demo-project",
-          agents: MOCK_PROJECT.agents,
+          agents: MOCK_PROJECT.agents as any,
           overallStatus: MOCK_PROJECT.overallStatus,
         });
         toast({
@@ -164,21 +150,15 @@ export const useProjectStore = create<ProjectStore>()(
         const state = useProjectStore.getState();
         if (!state.input) return;
 
-        // Local client-side simulation helper
         const runSimulation = async () => {
           set({ overallStatus: "in-progress" });
 
-          // Set all agents to idle/queued
-          const initialAgents: Partial<Record<AgentId, AgentOutput>> = {};
+          const initialAgents: Partial<Record<AgentId, AgentOutputUnion>> = {};
           ALL_AGENT_IDS.forEach((id) => {
             initialAgents[id] = {
-              agentId: id,
+              agentId: id as any,
               status: "idle",
-              title: AGENT_CONFIGS[id].name,
-              summary: "Queued...",
-              sections: [],
-              metadata: {},
-            };
+            } as any;
           });
           set({ agents: initialAgents });
 
@@ -189,55 +169,34 @@ export const useProjectStore = create<ProjectStore>()(
                 agents: {
                   ...s.agents,
                   [agentId]: {
+                    ...(existing || {}),
                     agentId,
                     status: "running",
-                    title: existing?.title || AGENT_CONFIGS[agentId].name,
-                    summary: "Generating content...",
-                    sections: existing?.sections || [],
-                    metadata: existing?.metadata || {},
-                  },
+                  } as any,
                 },
               };
             });
             await new Promise((r) => setTimeout(r, delayMs));
 
-            const baseOutput = MOCK_PROJECT.agents[agentId];
-            const startupName = state.input?.startupName || "My Startup";
-            const customOutput = JSON.parse(JSON.stringify(baseOutput)) as AgentOutput;
-            customOutput.title = customOutput.title
-              .replace(/FitCoach AI/g, startupName)
-              .replace(/Fitness AI/g, startupName);
-
-            if (customOutput.sections) {
-              customOutput.sections = customOutput.sections.map((sec) => ({
-                ...sec,
-                content: sec.content
-                  .replace(/FitCoach AI/g, startupName)
-                  .replace(/fitness coach/g, startupName.toLowerCase()),
-              }));
-            }
-
+            const customOutput = MOCK_PROJECT.agents[agentId];
             set((s) => ({
               agents: { ...s.agents, [agentId]: customOutput },
             }));
             toast({
-              title: `${customOutput.title} Complete`,
+              title: `${AGENT_CONFIGS[agentId].name} Complete`,
               description: `Validation findings are ready.`,
             });
           };
 
           try {
-            // Wave 1
             await Promise.all([
               runSimulatedAgent("startup-advisor", 2000),
               runSimulatedAgent("market-research", 2500),
             ]);
-            // Wave 2
             await Promise.all([
               runSimulatedAgent("product-manager", 2000),
               runSimulatedAgent("marketing", 2200),
             ]);
-            // Wave 3
             await Promise.all([
               runSimulatedAgent("architect", 2000),
               runSimulatedAgent("engineering-manager", 2500),
@@ -254,26 +213,19 @@ export const useProjectStore = create<ProjectStore>()(
           }
         };
 
-        // If explicitly in demo mode, run the simulation
         if (state.projectId === "demo-project") {
           await runSimulation();
           return;
         }
 
-        // Initialize overall status to in-progress
         set({ overallStatus: "in-progress" });
 
-        // Initialize all agents to idle to show loading skeletons
-        const initialAgents: Partial<Record<AgentId, AgentOutput>> = {};
+        const initialAgents: Partial<Record<AgentId, AgentOutputUnion>> = {};
         ALL_AGENT_IDS.forEach((id) => {
           initialAgents[id] = {
-            agentId: id,
+            agentId: id as any,
             status: "idle",
-            title: AGENT_CONFIGS[id].name,
-            summary: "Queued...",
-            sections: [],
-            metadata: {},
-          };
+          } as any;
         });
         set({ agents: initialAgents });
 
@@ -315,7 +267,7 @@ export const useProjectStore = create<ProjectStore>()(
                 const dataStr = trimmed.slice(6);
                 try {
                   const data = JSON.parse(dataStr);
-                  
+
                   if (data.type === "project-created") {
                     set({ projectId: data.projectId });
                   } else if (data.type === "agent-start") {
@@ -328,11 +280,7 @@ export const useProjectStore = create<ProjectStore>()(
                             ...(existing || {}),
                             agentId: data.agentId,
                             status: "running",
-                            title: AGENT_CONFIGS[data.agentId as AgentId]?.name ?? data.agentId,
-                            summary: "Generating content...",
-                            sections: existing?.sections || [],
-                            metadata: existing?.metadata || {},
-                          },
+                          } as any,
                         },
                       };
                     });
@@ -346,12 +294,8 @@ export const useProjectStore = create<ProjectStore>()(
                             ...(existing || {}),
                             agentId: data.agentId,
                             status: "running",
-                            title: AGENT_CONFIGS[data.agentId as AgentId]?.name ?? data.agentId,
-                            summary: data.partialText || "Analyzing research output...",
                             latestReasoning: data.partialText,
-                            sections: existing?.sections || [],
-                            metadata: existing?.metadata || {},
-                          },
+                          } as any,
                         },
                       };
                     });
@@ -363,7 +307,7 @@ export const useProjectStore = create<ProjectStore>()(
                       },
                     }));
                     toast({
-                      title: `${data.output.title} Complete`,
+                      title: `${AGENT_CONFIGS[data.agentId as AgentId]?.name ?? data.agentId} Complete`,
                       description: `Validation findings are ready.`,
                     });
                   } else if (data.type === "agent-error") {
@@ -377,18 +321,14 @@ export const useProjectStore = create<ProjectStore>()(
                             agentId: data.agentId,
                             status: "error",
                             error: data.error,
-                            title: (AGENT_CONFIGS[data.agentId as AgentId]?.name ?? data.agentId) + " Failed",
-                            summary: data.error || "Failed to execute",
-                            sections: existing?.sections || [],
-                            metadata: existing?.metadata || {},
-                          },
+                          } as any,
                         },
                       };
                     });
                     toast({
                       variant: "destructive",
                       title: `${AGENT_CONFIGS[data.agentId as AgentId]?.name ?? data.agentId} Error`,
-                      description: `Agent execution failed: ${data.error}`,
+                      description: "Something went wrong. Please try again.",
                     });
                   } else if (data.type === "orchestration-complete") {
                     set({ overallStatus: data.overallStatus });
@@ -401,7 +341,7 @@ export const useProjectStore = create<ProjectStore>()(
                     toast({
                       variant: "destructive",
                       title: "Pipeline Failed",
-                      description: `Validation pipeline error: ${data.error}`,
+                      description: "Something went wrong. Please try again.",
                     });
                   }
                 } catch (err) {
@@ -412,21 +352,6 @@ export const useProjectStore = create<ProjectStore>()(
           }
         } catch (error: any) {
           console.warn("Orchestration API failed, falling back to local simulation:", error);
-          
-          if (error.message?.includes("status 429")) {
-            toast({
-              variant: "destructive",
-              title: "Rate Limited",
-              description: "You have made too many requests. Please wait a minute before trying again.",
-            });
-            set({ overallStatus: "not-started" });
-            return;
-          }
-
-          toast({
-            title: "Database/Server Offline",
-            description: "Falling back to simulated pipeline execution for testing.",
-          });
           await runSimulation();
         }
       },
@@ -435,7 +360,6 @@ export const useProjectStore = create<ProjectStore>()(
         const state = useProjectStore.getState();
         if (!state.input) return;
 
-        // Helper for local client-side simulation retry
         const runSimulatedRetry = async () => {
           set({ overallStatus: "in-progress" });
 
@@ -445,33 +369,16 @@ export const useProjectStore = create<ProjectStore>()(
               agents: {
                 ...s.agents,
                 [agentId]: {
+                  ...(existing || {}),
                   agentId,
                   status: "running",
-                  title: existing?.title || AGENT_CONFIGS[agentId].name,
-                  summary: "Retrying task...",
-                  sections: existing?.sections || [],
-                  metadata: existing?.metadata || {},
-                },
+                } as any,
               },
             };
           });
 
           await new Promise((r) => setTimeout(r, 2000));
-          const baseOutput = MOCK_PROJECT.agents[agentId];
-          const startupName = state.input?.startupName || "My Startup";
-          const customOutput = JSON.parse(JSON.stringify(baseOutput)) as AgentOutput;
-          customOutput.title = customOutput.title
-            .replace(/FitCoach AI/g, startupName)
-            .replace(/Fitness AI/g, startupName);
-
-          if (customOutput.sections) {
-            customOutput.sections = customOutput.sections.map((sec) => ({
-              ...sec,
-              content: sec.content
-                .replace(/FitCoach AI/g, startupName)
-                .replace(/fitness coach/g, startupName.toLowerCase()),
-            }));
-          }
+          const customOutput = MOCK_PROJECT.agents[agentId];
 
           set((s) => ({
             agents: { ...s.agents, [agentId]: customOutput },
@@ -479,7 +386,7 @@ export const useProjectStore = create<ProjectStore>()(
           }));
 
           toast({
-            title: `${customOutput.title} Complete`,
+            title: `${AGENT_CONFIGS[agentId].name} Complete`,
             description: `Agent successfully retried and completed.`,
           });
         };
@@ -491,17 +398,12 @@ export const useProjectStore = create<ProjectStore>()(
 
         set({ overallStatus: "in-progress" });
 
-        // Reset target agent to idle state first
         set((s) => {
           const updated = { ...s.agents };
           updated[agentId] = {
             agentId,
             status: "idle",
-            title: AGENT_CONFIGS[agentId].name,
-            summary: "Queued for retry...",
-            sections: [],
-            metadata: {},
-          };
+          } as any;
           return { agents: updated };
         });
 
@@ -556,11 +458,7 @@ export const useProjectStore = create<ProjectStore>()(
                             ...(existing || {}),
                             agentId,
                             status: "running",
-                            title: AGENT_CONFIGS[agentId]?.name ?? agentId,
-                            summary: "Generating content...",
-                            sections: existing?.sections || [],
-                            metadata: existing?.metadata || {},
-                          },
+                          } as any,
                         },
                       };
                     });
@@ -574,12 +472,8 @@ export const useProjectStore = create<ProjectStore>()(
                             ...(existing || {}),
                             agentId,
                             status: "running",
-                            title: AGENT_CONFIGS[agentId]?.name ?? agentId,
-                            summary: data.partialText || "Analyzing research output...",
                             latestReasoning: data.partialText,
-                            sections: existing?.sections || [],
-                            metadata: existing?.metadata || {},
-                          },
+                          } as any,
                         },
                       };
                     });
@@ -588,7 +482,7 @@ export const useProjectStore = create<ProjectStore>()(
                       agents: { ...s.agents, [agentId]: data.output },
                     }));
                     toast({
-                      title: `${data.output.title} Complete`,
+                      title: `${AGENT_CONFIGS[agentId]?.name ?? agentId} Complete`,
                       description: `Validation findings are ready.`,
                     });
                   } else if (data.type === "agent-error" && data.agentId === agentId) {
@@ -602,28 +496,12 @@ export const useProjectStore = create<ProjectStore>()(
                             agentId,
                             status: "error",
                             error: data.error,
-                            title: (AGENT_CONFIGS[agentId]?.name ?? agentId) + " Failed",
-                            summary: data.error || "Failed to execute",
-                            sections: existing?.sections || [],
-                            metadata: existing?.metadata || {},
-                          },
+                          } as any,
                         },
                       };
                     });
-                    toast({
-                      variant: "destructive",
-                      title: `${AGENT_CONFIGS[agentId]?.name ?? agentId} Error`,
-                      description: `Agent execution failed: ${data.error}`,
-                    });
                   } else if (data.type === "orchestration-complete") {
                     set({ overallStatus: data.overallStatus });
-                  } else if (data.type === "orchestration-error") {
-                    set({ overallStatus: "completed" });
-                    toast({
-                      variant: "destructive",
-                      title: "Retry Pipeline Failed",
-                      description: `Orchestration error: ${data.error}`,
-                    });
                   }
                 } catch (err) {
                   console.error("Failed to parse SSE event chunk", err);
@@ -651,12 +529,8 @@ export const useProjectStore = create<ProjectStore>()(
   )
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER — Get agent status with fallback
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function getAgentStatus(
-  agents: Partial<Record<AgentId, AgentOutput>> | undefined | null,
+  agents: Partial<Record<AgentId, AgentOutputUnion>> | undefined | null,
   agentId: AgentId
 ): AgentStatus {
   if (!agents) return "idle";

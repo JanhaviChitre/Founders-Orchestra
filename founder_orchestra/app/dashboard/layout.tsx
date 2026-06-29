@@ -15,6 +15,7 @@ import { useState } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { PdfExportModal } from "@/components/dashboard/pdf-export-modal";
+import { NotionExportModal } from "@/components/dashboard/notion-export-modal";
 import { useProjectStore } from "@/lib/store/project-store";
 
 export default function DashboardLayout({
@@ -26,6 +27,7 @@ export default function DashboardLayout({
   const setPdfModalOpen = useProjectStore((s) => s.setPdfModalOpen);
   const runOrchestration = useProjectStore((s) => s.runOrchestration);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notionModalOpen, setNotionModalOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-fo-bg overflow-x-hidden">
@@ -35,6 +37,7 @@ export default function DashboardLayout({
       <main className="ml-0 md:ml-[240px] flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-300">
         <Topbar
           onExportPdf={() => setPdfModalOpen(true)}
+          onExportNotion={() => setNotionModalOpen(true)}
           onRunAll={() => runOrchestration()}
           onMenuClick={() => setMobileOpen(true)}
         />
@@ -43,6 +46,7 @@ export default function DashboardLayout({
         </div>
       </main>
       <PdfExportModal open={pdfModalOpen} onOpenChange={setPdfModalOpen} />
+      <NotionExportModal open={notionModalOpen} onOpenChange={setNotionModalOpen} />
     </div>
   );
 }

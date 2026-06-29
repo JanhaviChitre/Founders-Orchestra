@@ -3,8 +3,7 @@
  * COMPONENT — Competitor Table
  * =============================================================================
  *
- * Competitive landscape table with score bars and threat level pills.
- * Uses shadcn Table + Badge components.
+ * Competitive landscape table matching marketResearchOutputSchema.
  *
  * Owner: Frontend Lead (Team Member A)
  * =============================================================================
@@ -18,19 +17,25 @@ import {
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { CompetitorEntry } from "@/lib/types";
 import { motion } from "framer-motion";
 
-interface CompetitorTableProps {
-  competitors?: CompetitorEntry[];
+export interface CompetitorItem {
+  name: string;
+  tag: string;
+  strengths: string;
+  weaknesses: string;
+  price_per_month: string;
+  threat_level: "low" | "medium" | "high";
+  scores: { ai_capability: number; personalization: number };
 }
 
-const DEFAULT_COMPETITORS: CompetitorEntry[] = [
-  { name: "Whoop", tag: "Recovery-focused wearable + app", aiCoachingScore: 55, personalizationScore: 70, pricePerMonth: "$30", threatLevel: "high" },
-  { name: "Freeletics", tag: "Bodyweight AI training", aiCoachingScore: 80, personalizationScore: 65, pricePerMonth: "$14", threatLevel: "high" },
-  { name: "Future", tag: "Human coach matching via app", aiCoachingScore: 40, personalizationScore: 90, pricePerMonth: "$199", threatLevel: "medium" },
-  { name: "Nike Training Club", tag: "Free app, brand-heavy", aiCoachingScore: 30, personalizationScore: 35, pricePerMonth: "$0", threatLevel: "low" },
-  { name: "Peloton", tag: "Hardware + content ecosystem", aiCoachingScore: 45, personalizationScore: 50, pricePerMonth: "$44", threatLevel: "low" },
+interface CompetitorTableProps {
+  competitors?: CompetitorItem[];
+}
+
+const DEFAULT_COMPETITORS: CompetitorItem[] = [
+  { name: "Whoop", tag: "Recovery Wearable", strengths: "Strain tracking", weaknesses: "No workout generator", price_per_month: "$30", threat_level: "high", scores: { ai_capability: 75, personalization: 80 } },
+  { name: "Fitbod", tag: "Workout Generator", strengths: "Gym tracking", weaknesses: "Generic recommendations", price_per_month: "$13", threat_level: "medium", scores: { ai_capability: 60, personalization: 65 } },
 ];
 
 const THREAT_STYLES = {
@@ -43,9 +48,7 @@ const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.06,
-    },
+    transition: { staggerChildren: 0.06 },
   },
 };
 
@@ -54,11 +57,7 @@ const rowVariants = {
   show: {
     opacity: 1,
     y: 0,
-    transition: {
-      type: "spring",
-      stiffness: 200,
-      damping: 22,
-    },
+    transition: { type: "spring", stiffness: 200, damping: 22 },
   },
 } as const;
 
@@ -66,22 +65,30 @@ const MotionTableBody = motion.create(TableBody);
 const MotionTableRow = motion.create(TableRow);
 
 export function CompetitorTable({ competitors = DEFAULT_COMPETITORS }: CompetitorTableProps) {
+  const list = competitors && competitors.length > 0 ? competitors : DEFAULT_COMPETITORS;
+
   return (
     <Card className="mb-7">
       <CardContent className="pt-5">
+        <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-1">
+          Competitive Intelligence Matrix
+        </div>
+        <p className="text-xs text-fo-muted mb-4">
+          Feature capability scoring, pricing models, and market threat levels of real competitors.
+        </p>
         <div className="w-full overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Company</TableHead>
-                <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">AI Coaching</TableHead>
+                <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">AI Capability</TableHead>
                 <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Personalization</TableHead>
                 <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Price/mo</TableHead>
                 <TableHead className="text-[11px] font-semibold text-fo-muted uppercase tracking-[0.6px]">Threat Level</TableHead>
               </TableRow>
             </TableHeader>
             <MotionTableBody variants={containerVariants} initial="hidden" animate="show">
-              {competitors.map((comp) => (
+              {list.map((comp) => (
                 <MotionTableRow
                   key={comp.name}
                   variants={rowVariants}
@@ -92,17 +99,15 @@ export function CompetitorTable({ competitors = DEFAULT_COMPETITORS }: Competito
                     <span className="block text-[11px] text-fo-sub">{comp.tag}</span>
                   </TableCell>
                   <TableCell>
-                    <ScoreBar score={comp.aiCoachingScore} />
+                    <ScoreBar score={comp.scores?.ai_capability ?? 50} />
                   </TableCell>
                   <TableCell>
-                    <ScoreBar score={comp.personalizationScore} />
+                    <ScoreBar score={comp.scores?.personalization ?? 50} />
                   </TableCell>
+                  <TableCell className="font-mono text-xs font-semibold">{comp.price_per_month}</TableCell>
                   <TableCell>
-                    <span className="font-mono text-xs">{comp.pricePerMonth}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={cn("text-[10px] font-bold capitalize", THREAT_STYLES[comp.threatLevel])}>
-                      {comp.threatLevel}
+                    <Badge className={cn("text-[11px] font-semibold px-2 py-0.5 capitalize", THREAT_STYLES[comp.threat_level || "low"])}>
+                      {comp.threat_level || "low"}
                     </Badge>
                   </TableCell>
                 </MotionTableRow>
@@ -116,17 +121,18 @@ export function CompetitorTable({ competitors = DEFAULT_COMPETITORS }: Competito
 }
 
 function ScoreBar({ score }: { score: number }) {
+  const normalizedScore = score > 0 && score <= 10 ? score * 10 : score;
+  const clampedPercentage = Math.min(Math.max(normalizedScore, 0), 100);
+
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-[5px] bg-[rgba(255,255,255,.06)] rounded-sm overflow-hidden">
-        <motion.div
-          className="h-full rounded-sm bg-fo-indigo"
-          initial={{ width: 0 }}
-          animate={{ width: `${score}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+      <div className="h-1.5 w-[70px] bg-[rgba(255,255,255,.06)] rounded-full overflow-hidden">
+        <div
+          className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+          style={{ width: `${clampedPercentage}%` }}
         />
       </div>
-      <span className="font-mono text-xs text-fo-sub w-6">{score}</span>
+      <span className="font-mono text-xs text-fo-sub font-semibold">{score}</span>
     </div>
   );
 }

@@ -3,8 +3,8 @@
  * PAGE — Dashboard
  * =============================================================================
  *
- * The main Intelligence Dashboard — a single scrollable page with all
- * agent outputs displayed in sections matching the HTML reference.
+ * The main Intelligence Dashboard — displaying discrete AI agent outputs
+ * directly in components with zero text/regex parsing.
  *
  * Owner: Frontend Lead (Team Member A)
  * =============================================================================
@@ -16,7 +16,13 @@ import { useEffect } from "react";
 import { useProjectStore, getAgentStatus } from "@/lib/store/project-store";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentStatus } from "@/lib/types";
-import { toast } from "@/hooks/use-toast";
+import type {
+  MarketResearchOutput,
+  ProductManagerOutput,
+  ArchitectOutput,
+  EngineeringManagerOutput,
+  MarketingOutput,
+} from "@/lib/agents/schemas";
 
 // Dashboard sections
 import { AgentOrbit } from "@/components/dashboard/agent-orbit";
@@ -77,10 +83,8 @@ function getHeaderStatusProps(status: AgentStatus) {
 }
 
 export default function DashboardPage() {
-  const input = useProjectStore((s) => s.input);
   const agents = useProjectStore((s) => s.agents) || {};
   const overallStatus = useProjectStore((s) => s.overallStatus);
-  const runOrchestration = useProjectStore((s) => s.runOrchestration);
 
   // Whether the pipeline has ever been run — gates all content sections
   const hasRun = overallStatus !== "not-started";
@@ -92,23 +96,12 @@ export default function DashboardPage() {
   const engStatus = getAgentStatus(agents, "engineering-manager");
   const marketingStatus = getAgentStatus(agents, "marketing");
 
-  // Retrieve outputs
-  const marketOutput = agents["market-research"];
-  const pmOutput = agents["product-manager"];
-  const architectOutput = agents["architect"];
-  const engOutput = agents["engineering-manager"];
-  const marketingOutput = agents["marketing"];
-
-  // Map outputs to component structures
-  const marketSizingProps = getMarketSizingData(marketOutput);
-  const trendListTrends = getTrendListData(marketOutput);
-  const competitorEntries = getCompetitorData(marketOutput);
-  const userStoriesList = getUserStoriesData(pmOutput);
-  const roadmapPhases = getRoadmapData(pmOutput);
-  const schemaTables = getSchemaGridData(architectOutput);
-  const githubIssuesList = getGithubIssuesData(engOutput);
-  const sprintBoardCards = getSprintCardsData(githubIssuesList);
-  const marketingAssetsProps = getMarketingAssetsData(marketingOutput);
+  // Retrieve outputs casted to discrete schema types
+  const marketOutput = agents["market-research"] as MarketResearchOutput | undefined;
+  const pmOutput = agents["product-manager"] as ProductManagerOutput | undefined;
+  const architectOutput = agents["architect"] as ArchitectOutput | undefined;
+  const engOutput = agents["engineering-manager"] as EngineeringManagerOutput | undefined;
+  const marketingOutput = agents["marketing"] as MarketingOutput | undefined;
 
   useEffect(() => {
     const sections = document.querySelectorAll("section[id]");
@@ -122,10 +115,9 @@ export default function DashboardPage() {
           visibleSections.set(entry.target.id, entry.isIntersecting);
         });
 
-        // Find the first section that is visible (starting from top to bottom)
         const order = ["orbit", "market", "competitors", "product", "marketing", "architecture", "engineering"];
         const currentActive = order.find((id) => visibleSections.get(id));
-        
+
         if (currentActive) {
           useProjectStore.getState().setActiveSection(currentActive);
         }
@@ -148,725 +140,177 @@ export default function DashboardPage() {
         <StatsRow />
       </section>
 
-      <h2 className="text-xl font-display font-semibold mb-6 mt-12 border-b border-border pb-2 text-fo-text">
-        Wave 1: Strategy & Market
-      </h2>
-
-      {/* ── Market Intelligence ────────────────────────────────────────────── */}
-      <section id="market">
+      {/* ── Market Research Section ───────────────────────────────────────── */}
+      <section id="market" className="mb-10">
         <SectionHeader
           title="Market Intelligence"
+          description="Quantitative TAM/SAM/SOM market valuation estimates and live industry tailwind trends."
           color="#38BDF8"
           {...getHeaderStatusProps(marketStatus)}
         />
-        <div className="relative min-h-[200px]">
+        {!hasRun || marketStatus !== "completed" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="lg:col-span-2">
+              <MarketSizingSkeleton />
+            </div>
+            <div>
+              <TrendListSkeleton />
+            </div>
+          </div>
+        ) : (
           <AnimatePresence mode="wait">
-            {hasRun && marketStatus === "completed" ? (
-              <motion.div
-                key="market-content"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7"
-              >
-                <MarketSizing {...marketSizingProps} />
-                <TrendList trends={trendListTrends} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="market-skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7"
-              >
-                <MarketSizingSkeleton />
-                <TrendListSkeleton />
-              </motion.div>
-            )}
+            <motion.div
+              key="market-content"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="grid grid-cols-1 lg:grid-cols-3 gap-5"
+            >
+              <div className="lg:col-span-2">
+                <MarketSizing market_sizing={marketOutput?.market_sizing} />
+              </div>
+              <div>
+                <TrendList trends={marketOutput?.trends} />
+              </div>
+            </motion.div>
           </AnimatePresence>
-        </div>
+        )}
       </section>
 
-      {/* ── Competitive Landscape ──────────────────────────────────────────── */}
-      <section id="competitors">
+      {/* ── Competitive Landscape Section ───────────────────────────────────── */}
+      <section id="competitors" className="mb-10">
         <SectionHeader
           title="Competitive Landscape"
-          color="#F43F5E"
+          description="Direct and indirect competitor benchmarking, feature capability matrix, and pricing analysis."
+          color="#38BDF8"
           {...getHeaderStatusProps(marketStatus)}
         />
-        <div className="relative min-h-[250px] mb-7">
+        {!hasRun || marketStatus !== "completed" ? (
+          <CompetitorTableSkeleton />
+        ) : (
           <AnimatePresence mode="wait">
-            {hasRun && marketStatus === "completed" ? (
-              <motion.div
-                key="competitor-content"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-              >
-                <CompetitorTable competitors={competitorEntries} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="competitor-skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <CompetitorTableSkeleton />
-              </motion.div>
-            )}
+            <motion.div
+              key="competitors-content"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <CompetitorTable competitors={marketOutput?.competitors} />
+            </motion.div>
           </AnimatePresence>
-        </div>
+        )}
       </section>
 
-      <h2 className="text-xl font-display font-semibold mb-6 mt-12 border-b border-border pb-2 text-fo-text">
-        Wave 2: Product & Marketing
-      </h2>
-
-      {/* ── Product Intelligence ───────────────────────────────────────────── */}
-      <section id="product">
+      {/* ── Product Intelligence Section ─────────────────────────────────── */}
+      <section id="product" className="mb-10">
         <SectionHeader
-          title="Product Intelligence"
+          title="Product Blueprint & Roadmap"
+          description="Prioritized user stories, core requirements, and strategic multi-phase product release roadmap."
           color="#6366F1"
           {...getHeaderStatusProps(pmStatus)}
         />
-        <div className="relative min-h-[220px]">
+        {!hasRun || pmStatus !== "completed" ? (
+          <div className="space-y-7">
+            <UserStoriesSkeleton />
+            <ProductRoadmapSkeleton />
+          </div>
+        ) : (
           <AnimatePresence mode="wait">
-            {hasRun && pmStatus === "completed" ? (
-              <motion.div
-                key="product-content"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7"
-              >
-                <UserStories stories={userStoriesList} />
-                <ProductRoadmap phases={roadmapPhases} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="product-skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7"
-              >
-                <UserStoriesSkeleton />
-                <ProductRoadmapSkeleton />
-              </motion.div>
-            )}
+            <motion.div
+              key="product-content"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="space-y-7"
+            >
+              <UserStories user_stories={pmOutput?.user_stories} />
+              <ProductRoadmap roadmap={pmOutput?.roadmap} />
+            </motion.div>
           </AnimatePresence>
-        </div>
+        )}
       </section>
 
-      {/* ── Marketing Assets ───────────────────────────────────────────────── */}
-      <section id="marketing">
+      {/* ── Marketing Section ──────────────────────────────────────────────── */}
+      <section id="marketing" className="mb-10">
         <SectionHeader
-          title="Marketing Assets"
+          title="Marketing Assets & Strategy"
+          description="High-converting landing page copy, social launch posts, email angles, and positioning strategy."
           color="#F43F5E"
           {...getHeaderStatusProps(marketingStatus)}
         />
-        <div className="relative min-h-[180px] mb-7">
+        {!hasRun || marketingStatus !== "completed" ? (
+          <MarketingAssetsSkeleton />
+        ) : (
           <AnimatePresence mode="wait">
-            {hasRun && marketingStatus === "completed" ? (
-              <motion.div
-                key="marketing-content"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-              >
-                <MarketingAssets {...marketingAssetsProps} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="marketing-skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <MarketingAssetsSkeleton />
-              </motion.div>
-            )}
+            <motion.div
+              key="marketing-content"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <MarketingAssets
+                landing_page={marketingOutput?.landing_page}
+                linkedin_post={marketingOutput?.linkedin_post}
+                email_subjects={marketingOutput?.email_subjects}
+                campaign_strategy={marketingOutput?.campaign_strategy}
+              />
+            </motion.div>
           </AnimatePresence>
-        </div>
+        )}
       </section>
 
-      <h2 className="text-xl font-display font-semibold mb-6 mt-12 border-b border-border pb-2 text-fo-text">
-        Wave 3: Architecture & Engineering
-      </h2>
-
-      {/* ── Architecture ───────────────────────────────────────────────────── */}
-      <section id="architecture">
+      {/* ── Architecture Section ──────────────────────────────────────────── */}
+      <section id="architecture" className="mb-10">
         <SectionHeader
-          title="Architecture"
+          title="System Architecture"
+          description="Scalable relational database schema design, entity relationships, primary/foreign keys, and SQL types."
           color="#F59E0B"
           {...getHeaderStatusProps(architectStatus)}
         />
-        <div className="relative min-h-[180px] mb-7">
+        {!hasRun || architectStatus !== "completed" ? (
+          <SchemaGridSkeleton />
+        ) : (
           <AnimatePresence mode="wait">
-            {hasRun && architectStatus === "completed" ? (
-              <motion.div
-                key="architecture-content"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-              >
-                <SchemaGrid tables={schemaTables} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="architecture-skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <SchemaGridSkeleton />
-              </motion.div>
-            )}
+            <motion.div
+              key="architecture-content"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <SchemaGrid database_schema={architectOutput?.database_schema} />
+            </motion.div>
           </AnimatePresence>
-        </div>
+        )}
       </section>
 
-      {/* ── Engineering Execution ──────────────────────────────────────────── */}
-      <section id="engineering">
+      {/* ── Engineering Section ──────────────────────────────────────────── */}
+      <section id="engineering" className="mb-10">
         <SectionHeader
-          title="Engineering Execution"
-          color="#8B5CF6"
+          title="Engineering & Sprint Plan"
+          description="Actionable engineering backlog, GitHub issue tracking, and pre-kickoff 3-phase technical roadmap."
+          color="#A855F7"
           {...getHeaderStatusProps(engStatus)}
         />
-        <div className="relative min-h-[220px]">
+        {!hasRun || engStatus !== "completed" ? (
+          <div className="space-y-7">
+            <GithubIssuesSkeleton />
+            <SprintBoardSkeleton />
+          </div>
+        ) : (
           <AnimatePresence mode="wait">
-            {hasRun && engStatus === "completed" ? (
-              <motion.div
-                key="engineering-content"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7"
-              >
-                <GithubIssues issues={githubIssuesList} />
-                <SprintBoard cards={sprintBoardCards} />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="engineering-skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7"
-              >
-                <GithubIssuesSkeleton />
-                <SprintBoardSkeleton />
-              </motion.div>
-            )}
+            <motion.div
+              key="engineering-content"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="space-y-7"
+            >
+              <GithubIssues github_issues={engOutput?.github_issues} />
+              <SprintBoard sprint_plan={engOutput?.sprint_plan} />
+            </motion.div>
           </AnimatePresence>
-        </div>
+        )}
       </section>
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PARSING HELPERS — Format raw agent outputs into structured component props
-// ─────────────────────────────────────────────────────────────────────────────
-
-function formatNumber(num: number): string {
-  if (num >= 1_000_000_000_000) return (num / 1_000_000_000_000).toFixed(1).replace(/\.0$/, "") + "T";
-  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1).replace(/\.0$/, "") + "B";
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
-  return num.toString();
-}
-
-function getMarketSizingData(agentOutput: any): { entries?: any[]; insight?: string } {
-  if (!agentOutput || !agentOutput.sections) return {};
-  const section = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("size") || s.heading.toLowerCase().includes("sizing")
-  );
-  if (!section) return {};
-
-  const insight = section.content;
-
-  if (section.data && section.data.length > 0) {
-    const entries = section.data.map((dp: any) => {
-      let color = "#6366F1";
-      let percent = 100;
-      if (dp.name.toLowerCase().includes("sam")) {
-        color = "#38BDF8";
-        percent = 24;
-      } else if (dp.name.toLowerCase().includes("som")) {
-        color = "#10B981";
-        percent = 6;
-      }
-      return {
-        label: dp.name.includes(" — ") ? dp.name : `${dp.name} — ${dp.name.toLowerCase().includes("tam") ? "Total Addressable Market" : dp.name.toLowerCase().includes("sam") ? "Serviceable Addressable" : "Serviceable Obtainable"}`,
-        value: typeof dp.value === "number" ? `$${formatNumber(dp.value)}` : String(dp.value),
-        barPercent: percent,
-        barColor: color,
-      };
-    });
-
-    try {
-      const numericValues = section.data.map((e: any) => typeof e.value === "number" ? e.value : parseFloat(String(e.value).replace(/[^0-9.]/g, "")));
-      const max = Math.max(...numericValues);
-      if (max > 0) {
-        entries.forEach((e: any, i: number) => {
-          e.barPercent = Math.max(5, Math.round((numericValues[i] / max) * 100));
-        });
-      }
-    } catch (err) {}
-
-    return { entries, insight };
-  }
-
-  const lines = section.content.split("\n");
-  const entries: any[] = [];
-  lines.forEach((line: string) => {
-    const match = line.match(/(TAM|SAM|SOM)\s*[:—-]\s*(\$[0-9.]+[A-Z]?)/i);
-    if (match) {
-      const type = match[1].toUpperCase();
-      const val = match[2];
-      let color = "#6366F1";
-      let percent = 100;
-      if (type === "SAM") {
-        color = "#38BDF8";
-        percent = 24;
-      } else if (type === "SOM") {
-        color = "#10B981";
-        percent = 6;
-      }
-      entries.push({
-        label: `${type} — ${type === "TAM" ? "Total Addressable Market" : type === "SAM" ? "Serviceable Addressable" : "Serviceable Obtainable"}`,
-        value: val,
-        barPercent: percent,
-        barColor: color,
-      });
-    }
-  });
-
-  if (entries.length > 0) {
-    try {
-      const numericValues = entries.map(e => {
-        const raw = e.value.replace(/[^0-9.]/g, "");
-        const parsed = parseFloat(raw);
-        if (e.value.toLowerCase().includes("t")) return parsed * 1_000_000_000_000;
-        if (e.value.toLowerCase().includes("b")) return parsed * 1_000_000_000;
-        if (e.value.toLowerCase().includes("m")) return parsed * 1_000_000;
-        if (e.value.toLowerCase().includes("k")) return parsed * 1_000;
-        return parsed;
-      });
-      const max = Math.max(...numericValues);
-      if (max > 0) {
-        entries.forEach((e, i) => {
-          e.barPercent = Math.max(5, Math.round((numericValues[i] / max) * 100));
-        });
-      }
-    } catch (err) {}
-    return { entries, insight };
-  }
-
-  return {};
-}
-
-function getTrendListData(agentOutput: any): any[] | undefined {
-  if (!agentOutput || !agentOutput.sections) return undefined;
-  const section = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("trend")
-  );
-  if (!section) return undefined;
-
-  const lines = section.content.split("\n");
-  const trends: any[] = [];
-  let rank = 1;
-  lines.forEach((line: string) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    // Clean up rank prefix, e.g. "1. ", "- "
-    let cleanLine = trimmed.replace(/^[-•*\d.)\s]+/, "").trim();
-    
-    // Extract momentum if present, e.g. (+187%) or (-28%)
-    let momentum = "";
-    let direction: "up" | "down" = "up";
-    const momentumMatch = cleanLine.match(/\(([-+−\d%]+)\)/);
-    if (momentumMatch) {
-      momentum = momentumMatch[1];
-      cleanLine = cleanLine.replace(momentumMatch[0], "").trim();
-      if (momentum.startsWith("-") || momentum.startsWith("−") || momentum.toLowerCase().includes("down")) {
-        direction = "down";
-      } else {
-        direction = "up";
-      }
-    }
-
-    // Split title and description using a colon or em-dash/double-dash.
-    // Avoid splitting on a single hyphen so we don't break words like "Micro-workout"
-    let name = cleanLine;
-    let subtitle = "";
-    const splitMatch = cleanLine.match(/^([^*:—]+)(?::|—|--)\s*(.*)/);
-    if (splitMatch) {
-      name = splitMatch[1].replace(/\*\*/g, "").trim();
-      subtitle = splitMatch[2].replace(/\*\*/g, "").trim();
-    } else {
-      name = name.replace(/\*\*/g, "").trim();
-    }
-
-    if (name) {
-      const color = rank === 1 ? "#6366F1" : rank === 2 ? "#38BDF8" : rank === 3 ? "#10B981" : "#F43F5E";
-      
-      // Generate momentum if not extracted
-      if (!momentum) {
-        direction = name.toLowerCase().includes("fatigue") || name.toLowerCase().includes("churn") || name.toLowerCase().includes("drop") ? "down" : "up";
-        momentum = direction === "up" ? `+${Math.round(50 + Math.random()*150)}%` : `-${Math.round(10 + Math.random()*40)}%`;
-      }
-
-      trends.push({
-        rank: String(rank).padStart(2, '0'),
-        name,
-        subtitle: subtitle || "Emerging growth opportunity",
-        sparkData: direction === "up" ? [30 + Math.random()*20, 40 + Math.random()*20, 50 + Math.random()*20, 70 + Math.random()*20, 80 + Math.random()*20, 100] : [80 + Math.random()*20, 70 + Math.random()*20, 60 + Math.random()*20, 50, 45, 40],
-        sparkColor: color,
-        momentum,
-        direction,
-      });
-      rank++;
-    }
-  });
-
-  return trends.length > 0 ? trends : undefined;
-}
-
-function getCompetitorData(agentOutput: any): any[] | undefined {
-  if (!agentOutput || !agentOutput.sections) return undefined;
-  const section = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("competit")
-  );
-  if (!section) return undefined;
-
-  if (section.tableData && section.tableData.rows.length > 0) {
-    return section.tableData.rows.map((row: any) => ({
-      name: row[0],
-      tag: row[1] || "",
-      aiCoachingScore: parseInt(row[2]) || Math.round(30 + Math.random()*60),
-      personalizationScore: parseInt(row[3]) || Math.round(30 + Math.random()*60),
-      pricePerMonth: row[4] || "$19",
-      threatLevel: (row[5] || "medium").toLowerCase().includes("high") ? "high" : (row[5] || "").toLowerCase().includes("low") ? "low" : "medium",
-    }));
-  }
-
-  const lines = section.content.split("\n");
-  const competitors: any[] = [];
-  lines.forEach((line: string) => {
-    const trimmed = line.trim();
-    const match = trimmed.match(/^[-•*\d.)\s]+(?:\*\*(.*?)\*\*|([^*:]+))\s*[:—-]\s*(.*)/);
-    if (match) {
-      const name = (match[1] || match[2] || "").trim();
-      const desc = match[3].trim();
-      if (name && desc) {
-        competitors.push({
-          name,
-          tag: desc.substring(0, 60) + (desc.length > 60 ? "..." : ""),
-          aiCoachingScore: Math.round(40 + Math.random()*55),
-          personalizationScore: Math.round(40 + Math.random()*55),
-          pricePerMonth: desc.includes("$") ? (desc.match(/\$\d+/)?.[0] || "$29") : "$29",
-          threatLevel: desc.toLowerCase().includes("high") ? "high" : desc.toLowerCase().includes("low") ? "low" : "medium",
-        });
-      }
-    }
-  });
-
-  return competitors.length > 0 ? competitors : undefined;
-}
-
-function getUserStoriesData(agentOutput: any): any[] | undefined {
-  if (!agentOutput || !agentOutput.sections) return undefined;
-  const section = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("stor")
-  );
-  if (!section) return undefined;
-
-  const normalized = section.content
-    .replace(/(\d+)\.\s+(?=As\s+a[n]?\s)/gi, '\n$1. ')
-    .replace(/\(high,|medium,|low,/gi, (m: string) => '\n' + m);
-  const lines = normalized.split("\n");
-  const stories: any[] = [];
-  let idCounter = 1;
-  lines.forEach((line: string) => {
-    const trimmed = line.trim();
-    if (trimmed.toLowerCase().includes("as a") || trimmed.toLowerCase().includes("as an")) {
-      let cleanText = trimmed.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, "");
-      let priority = "medium";
-      let epic = "Core Platform";
-
-      const metaMatch = cleanText.match(/\((high|medium|low),\s*epic:\s*([^)]+)\)/i);
-      if (metaMatch) {
-        priority = metaMatch[1].toLowerCase();
-        epic = metaMatch[2].trim();
-        cleanText = cleanText.replace(metaMatch[0], "").trim();
-      } else {
-        priority = cleanText.toLowerCase().includes("must") || cleanText.toLowerCase().includes("critical") || idCounter <= 2 ? "high" : idCounter <= 4 ? "medium" : "low";
-        epic = cleanText.includes("workout") || cleanText.includes("exercise") ? "Workout Engine" : cleanText.includes("onboard") || cleanText.includes("sign up") ? "Onboarding" : "Core Platform";
-      }
-
-      stories.push({
-        id: `US-${String(idCounter).padStart(3, '0')}`,
-        text: cleanText,
-        epic,
-        priority,
-      });
-      idCounter++;
-    }
-  });
-
-  return stories.length > 0 ? stories : undefined;
-}
-
-function getRoadmapData(agentOutput: any): any[] | undefined {
-  if (!agentOutput || !agentOutput.sections) return undefined;
-  const section = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("roadmap")
-  );
-  if (!section) return undefined;
-
-  const normalized = section.content
-    .replace(/(Phase\s*\d+(?:\s*\([^)]*\))?|Q\d+(?:\s*\([^)]*\))?|\bMVP\b|\bGrowth\b|\bScale\b)\s*[:)]?\s*/gi, '\n$1: ')
-    .replace(/\.\s+(Phase\s*\d+|Q\d+|\bMVP\b|\bGrowth\b|\bScale\b)/gi, '.\n$1');
-  const lines = normalized.split("\n");
-  const phases: any[] = [];
-  let currentPhase: any = null;
-
-  lines.forEach((line: string) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    const colonIndex = trimmed.indexOf(":");
-    let headerText = trimmed;
-    let inlineContent = "";
-    if (colonIndex !== -1) {
-      headerText = trimmed.substring(0, colonIndex).trim();
-      inlineContent = trimmed.substring(colonIndex + 1).trim();
-    }
-
-    const isPhaseHeader = headerText.match(/^(?:Phase\s*\d+|Q\d+|\*\*Phase|\*\*Q\d+)/i) || 
-                          headerText.toLowerCase().includes("mvp") || 
-                          headerText.toLowerCase().includes("growth") || 
-                          headerText.toLowerCase().includes("scale");
-
-    if (isPhaseHeader && !trimmed.startsWith("-") && !trimmed.startsWith("*")) {
-      if (currentPhase) {
-        phases.push(currentPhase);
-      }
-      const idx = phases.length;
-      const quarter = idx === 0 ? "q1" : idx === 1 ? "q2" : "q3";
-      const label = idx === 0 ? "Q1 — MVP" : idx === 1 ? "Q2 — Growth" : idx === 2 ? "Q3 — Scale" : `Q${idx + 1} — Future`;
-      
-      let title = headerText.replace(/[#*`]/g, "").replace(/^Phase\s*\d+[:\s-]*/i, "").trim();
-      title = title.replace(/^[:()\s-]+|[:()\s-]+$/g, "").trim();
-      if (!title) {
-        title = idx === 0 ? "MVP" : idx === 1 ? "Growth" : "Scale";
-      }
-
-      currentPhase = {
-        label,
-        title,
-        quarter,
-        items: [],
-      };
-
-      if (inlineContent) {
-        const rawItems = inlineContent.split(/[,;]|\.\s+/);
-        rawItems.forEach((item) => {
-          const cleaned = item.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, "").trim();
-          const finalItem = cleaned.replace(/\.$/, "").trim();
-          const lower = finalItem.toLowerCase();
-          if (finalItem && finalItem.length > 2 && !lower.includes("phase") && lower !== "mvp" && lower !== "growth" && lower !== "scale") {
-            currentPhase.items.push(finalItem);
-          }
-        });
-      }
-    } else if (currentPhase && (trimmed.startsWith("-") || trimmed.startsWith("*") || trimmed.match(/^\d+[.)]/))) {
-      currentPhase.items.push(trimmed.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, ""));
-    }
-  });
-
-  if (currentPhase) {
-    phases.push(currentPhase);
-  }
-
-  return phases.length > 0 ? phases : undefined;
-}
-
-function getSchemaGridData(agentOutput: any): any[] | undefined {
-  if (!agentOutput || !agentOutput.sections) return undefined;
-  const section = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("schema") || s.heading.toLowerCase().includes("database")
-  );
-  if (!section) return undefined;
-
-  const lines = section.content.split("\n");
-  const tables: any[] = [];
-  let currentTable: any = null;
-
-  lines.forEach((line: string) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    const isTableName = trimmed.startsWith("###") || trimmed.startsWith("Table:") || (trimmed.startsWith("**") && trimmed.endsWith("**") && !trimmed.includes(":") && !trimmed.includes("-"));
-    if (isTableName) {
-      if (currentTable) {
-        tables.push(currentTable);
-      }
-      currentTable = {
-        name: trimmed.replace(/[#*`]/g, "").replace(/^Table:\s*/i, "").trim(),
-        columns: [],
-      };
-    } else if (currentTable && (trimmed.startsWith("-") || trimmed.startsWith("*") || trimmed.includes("|"))) {
-      const colMatch = trimmed.match(/(?:-|\*|\|)\s*`?([a-zA-Z0-9_]+)`?\s*\(?\s*([a-zA-Z0-9_(),\s/]+)\)?/);
-      if (colMatch) {
-        const colName = colMatch[1];
-        const colType = colMatch[2].split(",")[0].trim();
-        const isPK = colMatch[2].toLowerCase().includes("pk") || colMatch[2].toLowerCase().includes("primary");
-        const isFK = colMatch[2].toLowerCase().includes("fk") || colMatch[2].toLowerCase().includes("foreign");
-        const exists = currentTable.columns.some((c: any) => c.name === colName);
-        if (!exists) {
-          currentTable.columns.push({
-            name: colName,
-            type: colType,
-            isKey: isPK || isFK,
-            badge: isPK ? "PK" : isFK ? "FK" : undefined,
-          });
-        }
-      }
-    }
-  });
-
-  if (currentTable) {
-    tables.push(currentTable);
-  }
-
-  return tables.length > 0 ? tables : undefined;
-}
-
-function getGithubIssuesData(agentOutput: any): any[] | undefined {
-  if (!agentOutput || !agentOutput.sections) return undefined;
-  const section = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("issue")
-  );
-  if (!section) return undefined;
-
-  const lines = section.content.split("\n");
-  const issues: any[] = [];
-  let issueCounter = 1;
-
-  lines.forEach((line: string) => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("-") || trimmed.startsWith("*") || trimmed.match(/^\d+[.)]/)) {
-      const cleanText = trimmed.replace(/^[-•*\d.)\s]+/, "").replace(/\*\*/g, "");
-      const spMatch = cleanText.match(/(?:\(|\[)\s*(\d+)\s*(?:sp|story|points?)\s*(?:\)|\])/i);
-      const points = spMatch ? parseInt(spMatch[1]) : 5;
-      const title = cleanText.replace(/(?:\(|\[)\s*\d+\s*(?:sp|story|points?)\s*(?:\)|\])/i, "").trim();
-
-      const labels: any[] = [];
-      if (title.toLowerCase().includes("auth") || title.toLowerCase().includes("jwt")) {
-        labels.push({ text: "auth", variant: "auth" });
-      }
-      if (title.toLowerCase().includes("ai") || title.toLowerCase().includes("model")) {
-        labels.push({ text: "ai", variant: "ai" });
-      }
-      if (title.toLowerCase().includes("ui") || title.toLowerCase().includes("page")) {
-        labels.push({ text: "ui", variant: "ui" });
-      }
-      if (labels.length === 0) {
-        labels.push({ text: "feature", variant: "feat" });
-      }
-      labels.push({ text: `P${issueCounter <= 2 ? 1 : issueCounter <= 4 ? 2 : 3}`, variant: `p${issueCounter <= 2 ? 1 : issueCounter <= 4 ? 2 : 3}` });
-
-      issues.push({
-        number: `#${String(issueCounter).padStart(3, '0')}`,
-        title,
-        labels,
-        storyPoints: points,
-      });
-      issueCounter++;
-    }
-  });
-
-  return issues.length > 0 ? issues : undefined;
-}
-
-function getSprintCardsData(issues: any[] | undefined): any[] | undefined {
-  if (!issues || issues.length === 0) return undefined;
-  return issues.map((issue, idx) => ({
-    title: issue.title,
-    points: issue.storyPoints,
-    linkedId: issue.number,
-    column: idx < 2 ? "done" : idx < 4 ? "inprog" : "todo",
-  }));
-}
-
-function getMarketingAssetsData(agentOutput: any): { headline?: string; subheadline?: string; cta?: string; socialProof?: string; linkedinPost?: string } | undefined {
-  if (!agentOutput || !agentOutput.sections) return undefined;
-
-  const landingSection = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("landing")
-  );
-  const linkedinSection = agentOutput.sections.find((s: any) =>
-    s.heading.toLowerCase().includes("linkedin") || s.heading.toLowerCase().includes("social")
-  );
-
-  /**
-   * Guard against LLM repetition loops.
-   * If a single extracted field is longer than maxLen, it's likely stuck in a loop.
-   * We truncate at the first sentence or at maxLen chars.
-   */
-  function guardRepetition(text: string, maxLen = 250): string {
-    if (!text || text.length <= maxLen) return text;
-    // Try to truncate at the first sentence end within limits
-    const sentenceEnd = text.substring(0, maxLen).lastIndexOf(".");
-    if (sentenceEnd > 20) return text.substring(0, sentenceEnd + 1).trim();
-    return text.substring(0, maxLen).trim() + "...";
-  }
-
-  const res: any = {};
-  if (landingSection) {
-    const content = landingSection.content;
-    // Support both "Hero Headline:" and "Hero:"/"\*\*Hero:\*\*" and "Headline:" patterns
-    const headlineMatch = content.match(/(?:Hero\s*Headline|Headline|Hero|Title)\s*[:—\-]\s*([^\n]+)/i);
-    const subheadlineMatch = content.match(/(?:Subheadline|Sub-headline|Subtitle)\s*[:—\-]\s*([^\n]+)/i);
-    const ctaMatch = content.match(/(?:CTA|Button|Call to action)\s*[:—\-]\s*([^\n]+)/i);
-    const socialProofMatch = content.match(/(?:Social\s*Proof|Testimonial|Quote)\s*[:—\-]\s*([^\n]+)/i);
-
-    if (headlineMatch) res.headline = guardRepetition(headlineMatch[1].replace(/\*\*/g, "").trim());
-    if (subheadlineMatch) res.subheadline = guardRepetition(subheadlineMatch[1].replace(/\*\*/g, "").trim());
-    if (ctaMatch) res.cta = guardRepetition(ctaMatch[1].replace(/\*\*/g, "").trim(), 50);
-    if (socialProofMatch) res.socialProof = guardRepetition(socialProofMatch[1].replace(/\*\*/g, "").trim());
-
-    // If no headline found through regex, use the first non-empty content line as headline
-    if (!res.headline && content) {
-      const firstLine = content.split("\n").find((l: string) => l.trim().length > 5);
-      if (firstLine) res.headline = guardRepetition(firstLine.replace(/[*#]/g, "").trim());
-    }
-  }
-
-  if (linkedinSection) {
-    // Truncate the LinkedIn post at 1500 characters to prevent runaway content
-    const rawPost = linkedinSection.content || "";
-    res.linkedinPost = rawPost.substring(0, 1500);
-  }
-
-  return Object.keys(res).length > 0 ? res : undefined;
-}
-

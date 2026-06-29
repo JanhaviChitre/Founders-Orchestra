@@ -44,6 +44,11 @@ export type AgentId =
  */
 export type AgentStatus = "idle" | "running" | "completed" | "error";
 
+import { z } from "zod";
+import type { AgentOutputUnion } from "@/lib/agents/schemas";
+
+export type { AgentOutputUnion } from "@/lib/agents/schemas";
+
 /**
  * Configuration for one AI agent.
  * This tells the system HOW to run the agent.
@@ -59,30 +64,20 @@ export interface AgentConfig {
   systemPrompt: string;      // Instructions that tell the AI how to behave
   wave: 1 | 2 | 3;          // Execution order: wave 1 runs first, then 2, then 3
   tools?: AgentTool[];       // Which tools this agent can use (empty = no tools)
+  outputSchema: z.ZodType<any>; // Discrete per-agent Zod output schema
 }
 
 /**
  * Tools that can be assigned to agents.
- * - "search": Tavily web search for real-time data (TAM, competitors, trends)
+ * - "search": Exa AI web search for real-time data (TAM, competitors, trends)
  */
 export type AgentTool = "search";
 
 /**
  * The output that each agent produces.
- * This is what gets displayed on the dashboard.
+ * Represented as a discriminated union based on agentId.
  */
-export interface AgentOutput {
-  agentId: AgentId;
-  status: AgentStatus;
-  title: string;             // Title of the agent's output section
-  summary: string;           // Brief 1-2 sentence summary
-  sections: OutputSection[]; // Detailed output broken into sections
-  metadata: Record<string, unknown>; // Any extra data (scores, counts, etc.)
-  startedAt?: string;        // ISO timestamp when agent started
-  completedAt?: string;      // ISO timestamp when agent finished
-  error?: string;            // Error message if status is "error"
-  latestReasoning?: string;  // Partial streaming text from the agent's reasoning
-}
+export type AgentOutput = AgentOutputUnion;
 
 /**
  * One section within an agent's output.
@@ -95,6 +90,19 @@ export interface OutputSection {
   data?: ChartDataPoint[];   // Optional: data points for rendering a chart
   chartType?: ChartType;     // Optional: what kind of chart to render
   tableData?: TableData;     // Optional: data for rendering a table
+  competitors?: CompetitorEntry[];
+  userStories?: UserStory[];
+  roadmapPhases?: RoadmapPhase[];
+  schemaTables?: SchemaTable[];
+  githubIssues?: GithubIssue[];
+  sprintCards?: SprintCard[];
+  marketingCopy?: {
+    headline?: string;
+    subheadline?: string;
+    cta?: string;
+    socialProof?: string;
+    linkedinPost?: string;
+  };
 }
 
 /** Supported chart types for data visualization */

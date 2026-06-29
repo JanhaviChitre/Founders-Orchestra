@@ -3,7 +3,7 @@
  * COMPONENT — Product Roadmap
  * =============================================================================
  *
- * 3-phase product roadmap with colored cards (Q1/Q2/Q3).
+ * 3-phase product roadmap matching productManagerOutputSchema.
  *
  * Owner: Frontend Lead (Team Member A)
  * =============================================================================
@@ -14,18 +14,18 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Map } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RoadmapPhase } from "@/lib/types";
 import { motion } from "framer-motion";
 
-interface ProductRoadmapProps {
-  phases?: RoadmapPhase[];
+export interface RoadmapItem {
+  phase: "MVP" | "Growth" | "Scale";
+  label: string;
+  quarter: "q1" | "q2" | "q3";
+  features: string[];
 }
 
-const DEFAULT_PHASES: RoadmapPhase[] = [
-  { label: "Q1 — MVP", title: "Foundation", quarter: "q1", items: ["User auth + onboarding", "AI workout generator", "Basic progress tracking", "iOS app launch"] },
-  { label: "Q2 — Growth", title: "Intelligence", quarter: "q2", items: ["Wearable integrations", "Adaptive AI coach", "Social / accountability", "Android launch"] },
-  { label: "Q3 — Scale", title: "Monetization", quarter: "q3", items: ["Premium tier ($19/mo)", "B2B / enterprise", "Nutrition module", "Coach marketplace"] },
-];
+interface ProductRoadmapProps {
+  roadmap?: RoadmapItem[];
+}
 
 const QUARTER_STYLES = {
   q1: { bg: "bg-[rgba(99,102,241,.07)]", border: "border-[rgba(99,102,241,.25)]", label: "text-fo-indigo" },
@@ -37,9 +37,7 @@ const containerVariants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
+    transition: { staggerChildren: 0.1 },
   },
 };
 
@@ -48,22 +46,33 @@ const columnVariants = {
   show: {
     opacity: 1,
     y: 0,
-    transition: {
-      type: "spring",
-      stiffness: 160,
-      damping: 18,
-    },
+    transition: { type: "spring", stiffness: 160, damping: 18 },
   },
 } as const;
 
-export function ProductRoadmap({ phases = DEFAULT_PHASES }: ProductRoadmapProps) {
+export function ProductRoadmap({ roadmap }: ProductRoadmapProps) {
+  if (!roadmap || roadmap.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-5 pb-5 flex flex-col items-center justify-center min-h-[160px] text-center gap-2">
+          <Map size={18} className="text-fo-muted" />
+          <p className="text-sm font-semibold text-fo-sub">Product Roadmap</p>
+          <p className="text-xs text-fo-muted">Product agent did not return roadmap data.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardContent className="pt-5 pb-5">
-        <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-4 flex items-center gap-2">
+        <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-1 flex items-center gap-2">
           <Map size={14} />
-          Product Roadmap
+          Multi-Phase Product Roadmap
         </div>
+        <p className="text-xs text-fo-muted mb-4">
+          Strategic feature rollout timeline planned across MVP, Growth, and Scale milestones.
+        </p>
 
         <motion.div
           variants={containerVariants}
@@ -71,29 +80,25 @@ export function ProductRoadmap({ phases = DEFAULT_PHASES }: ProductRoadmapProps)
           animate="show"
           className="grid grid-cols-1 md:grid-cols-3 gap-3"
         >
-          {phases.map((phase, idx) => {
-            const style = QUARTER_STYLES[phase.quarter] || QUARTER_STYLES.q3;
+          {roadmap.map((item, idx) => {
+            const style = QUARTER_STYLES[item.quarter] || QUARTER_STYLES.q3;
             return (
               <motion.div
-                key={`${phase.label}-${idx}`}
+                key={`${item.label}-${idx}`}
                 variants={columnVariants}
                 whileHover={{ y: -3, scale: 1.015 }}
                 transition={{ y: { duration: 0.15 }, scale: { duration: 0.15 } }}
-                className={cn(
-                  "rounded-[10px] p-3.5 border cursor-default",
-                  style.bg,
-                  style.border
-                )}
+                className={cn("rounded-[10px] p-3.5 border cursor-default", style.bg, style.border)}
               >
                 <div className={cn("font-mono text-[10px] font-semibold uppercase tracking-[1px] mb-2", style.label)}>
-                  {phase.label}
+                  {item.phase} — {item.quarter.toUpperCase()}
                 </div>
-                <div className="font-display text-sm font-semibold mb-2">{phase.title}</div>
+                <div className="font-display text-sm font-semibold mb-2">{item.label}</div>
                 <ul className="space-y-1">
-                  {phase.items.map((item) => (
-                    <li key={item} className="text-xs text-fo-sub flex items-center gap-1.5">
+                  {(item.features || []).map((feat, featIdx) => (
+                    <li key={`${feat}-${featIdx}`} className="text-xs text-fo-sub flex items-center gap-1.5">
                       <span className="text-[10px] text-fo-muted">—</span>
-                      {item}
+                      {feat}
                     </li>
                   ))}
                 </ul>

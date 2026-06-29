@@ -3,7 +3,7 @@
  * COMPONENT — Trend List
  * =============================================================================
  *
- * Vertical list of emerging market trends with sparkline bars.
+ * Vertical list of emerging market trends matching marketResearchOutputSchema.
  *
  * Owner: Frontend Lead (Team Member A)
  * =============================================================================
@@ -14,70 +14,65 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TrendItem } from "@/lib/types";
+import { ExpandableText } from "@/components/ui/expandable-text";
 
-interface TrendListProps {
-  trends?: TrendItem[];
+export interface TrendItemData {
+  name: string;
+  description: string;
+  momentum: string;
+  direction: "up" | "down";
+  growth_percent: number;
 }
 
-const DEFAULT_TRENDS: TrendItem[] = [
-  { rank: "01", name: "AI Personalization in Health", subtitle: "Real-time adaptive workout plans", sparkData: [40, 55, 50, 75, 90, 100], sparkColor: "#6366F1", momentum: "+187%", direction: "up" },
-  { rank: "02", name: "Wearable Integration", subtitle: "Apple Watch, Whoop, Oura Ring sync", sparkData: [50, 60, 65, 70, 80, 85], sparkColor: "#38BDF8", momentum: "+134%", direction: "up" },
-  { rank: "03", name: "Micro-workout Content", subtitle: "<15 min sessions for time-poor users", sparkData: [30, 45, 70, 75, 90, 95], sparkColor: "#10B981", momentum: "+211%", direction: "up" },
-  { rank: "04", name: "Subscription Fatigue", subtitle: "Users consolidating fitness apps", sparkData: [80, 70, 60, 55, 45, 40], sparkColor: "#F43F5E", momentum: "−28%", direction: "down" },
+interface TrendListProps {
+  trends?: TrendItemData[];
+}
+
+const DEFAULT_TRENDS: TrendItemData[] = [
+  { name: "AI Personalization in Health", description: "Real-time adaptive workout plans", momentum: "+187%", direction: "up", growth_percent: 187 },
+  { name: "Micro-workout Content", description: "<15 min sessions for time-poor users", momentum: "+211%", direction: "up", growth_percent: 211 },
 ];
 
 export function TrendList({ trends = DEFAULT_TRENDS }: TrendListProps) {
+  const list = trends && trends.length > 0 ? trends : DEFAULT_TRENDS;
+
   return (
     <Card>
       <CardContent className="pt-5 pb-5">
-        <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-4 flex items-center gap-2">
+        <div className="font-display text-[13px] font-semibold text-fo-sub uppercase tracking-[0.8px] mb-1 flex items-center gap-2">
           <TrendingUp size={14} />
-          Emerging Trends
+          Emerging Industry Trends
         </div>
+        <p className="text-xs text-fo-muted mb-4">
+          Key technology tailwinds and market momentum accelerating adoption.
+        </p>
 
         <div className="flex flex-col gap-2.5">
-          {trends.map((trend) => (
+          {list.map((trend, idx) => (
             <div
-              key={trend.rank}
+              key={idx}
               className="flex items-center gap-3 p-2.5 px-3 rounded-lg bg-[rgba(255,255,255,.025)] border border-[rgba(255,255,255,.05)]"
             >
-              {/* Rank */}
               <span className="font-mono text-[11px] text-fo-muted w-[18px]">
-                {trend.rank}
+                {String(idx + 1).padStart(2, "0")}
               </span>
 
-              {/* Body */}
               <div className="flex-1">
                 <div className="text-[13px] font-medium">{trend.name}</div>
-                <div className="text-[11px] text-fo-sub mt-0.5">{trend.subtitle}</div>
-              </div>
-
-              {/* Sparkline */}
-              <div className="flex items-end gap-[2px] h-6">
-                {trend.sparkData.map((h, i) => (
-                  <div
-                    key={i}
-                    className="w-1 rounded-t-sm"
-                    style={{
-                      height: `${h}%`,
-                      background:
-                        i === trend.sparkData.length - 1
-                          ? trend.sparkColor
-                          : "#6366F1",
-                      opacity: i === trend.sparkData.length - 1 ? 1 : 0.5,
-                    }}
+                <div className="mt-0.5">
+                  <ExpandableText
+                    text={trend.description}
+                    maxChars={60}
+                    textClassName="text-[11px] text-fo-sub"
                   />
-                ))}
+                </div>
               </div>
 
-              {/* Momentum */}
               <span
                 className={cn(
                   "font-mono text-xs font-semibold",
                   trend.direction === "up" ? "text-fo-emerald" : "text-fo-rose"
                 )}
-                style={trend.direction === "up" && trend.sparkColor !== "#10B981" ? { color: trend.sparkColor } : undefined}
               >
                 {trend.momentum}
               </span>

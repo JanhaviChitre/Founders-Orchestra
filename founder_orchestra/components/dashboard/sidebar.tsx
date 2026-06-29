@@ -64,17 +64,17 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Product",
+    label: "Product & Marketing",
     items: [
       { icon: FileText, label: "PRD & Roadmap", sectionId: "product" },
-      { icon: Building2, label: "Architecture", sectionId: "architecture" },
+      { icon: Megaphone, label: "Marketing", sectionId: "marketing" },
     ],
   },
   {
-    label: "Execution",
+    label: "Technical Execution",
     items: [
+      { icon: Building2, label: "Architecture", sectionId: "architecture" },
       { icon: GitBranch, label: "Engineering", sectionId: "engineering" },
-      { icon: Megaphone, label: "Marketing", sectionId: "marketing" },
     ],
   },
 ];

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface PdfExportModalProps {
   open: boolean;
@@ -43,6 +43,14 @@ export function PdfExportModal({ open, onOpenChange }: PdfExportModalProps) {
   const [selected, setSelected] = useState<Record<string, boolean>>(
     Object.fromEntries(REPORT_SECTIONS.map((s) => [s.id, s.defaultChecked]))
   );
+
+  // Reset modal state when opened
+  useEffect(() => {
+    if (open) {
+      setSelected(Object.fromEntries(REPORT_SECTIONS.map((s) => [s.id, s.defaultChecked])));
+      setIsExporting(false);
+    }
+  }, [open]);
 
   const toggleSection = (id: string) => {
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
